@@ -6,7 +6,7 @@ A Zig-based systems programming language and toolchain for building operating sy
 
 Väinölang is built around one primary goal:
 
-> **Remove unnecessary assembly from operating-system development.**
+> **Remove unnecessary assembly and linker scripts from operating-system development.**
 
 Operating systems need precise control over hardware. Today, that often means dropping from a systems language into architecture-specific assembly.
 
