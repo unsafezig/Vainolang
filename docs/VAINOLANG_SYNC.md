@@ -21,6 +21,8 @@ fork. Every 0.17 change that is evaluated gets an entry before it is merged.
 | `0.17.0` release notes | Language, stdlib, build, linker | Evaluate by subsystem, not as one change | 0.17 contains useful features and breaking changes; individual commit SHAs are added before cherry-pick |
 | 0.17.0 soft-float-x86 regression | Compiler / freestanding | Defer as default until fixed or worked around | Directly affects Zinux's `x86_64` soft-float kernel target; QEMU smoke boot is required |
 | 0.17.0 maker/configurer split | Build system | Take with migration | Required for the Zinux build migration; ZLS impact is documented |
+| `f810faa828` `@divCeil` implementation | Compiler | Defer as a cohesive series | 28 files across AIR, Sema, codegen and tests; do not cherry-pick it as an isolated builtin |
+| `cb4c344e19` `@backingInt` / `@fromBackingInt` implementation | Compiler | Defer as a cohesive series | 60 files across type resolution, codegen, stage1 and tests; validate on a dedicated integration branch |
 
 ## Entry format
 

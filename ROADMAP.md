@@ -33,8 +33,8 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 
 | Feature | Why it matters for Väinö/Zinux |
 |---|---|
-| `@divCeil` | Kernel alignment and size math without hand-rolled helpers |
-| `@backingInt` / `@fromBackingInt` | Explicit int↔enum conversion for capability `Rights`/audit codes; replaces `@bitCast` patterns |
+| `@divCeil` | Kernel alignment and size math without hand-rolled helpers; take as a complete upstream dependency series |
+| `@backingInt` / `@fromBackingInt` | Explicit int↔enum conversion for capability `Rights`/audit codes; take as a complete upstream dependency series |
 | Deref/coercion of `comptime`-length slices to array pointers | ELF loader parsing (`kernel/loader`) |
 | Formally specified + fuzzed grammar | Helps validate AI-generated driver code syntactically |
 | `findProgram` / `findProgramLazy` | Find `xorriso`, `qemu-system-x86_64`, `cc` in ISO/run steps |
