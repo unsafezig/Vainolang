@@ -269,7 +269,12 @@ pub fn build(b: *std.Build) !void {
         }, &code, .ignore) catch {
             break :v version_string;
         };
-        const git_describe = mem.trim(u8, git_describe_untrimmed, " \n\r");
+        const git_describe_raw = mem.trim(u8, git_describe_untrimmed, " \n\r");
+        const is_vainolang_tag = mem.startsWith(u8, git_describe_raw, "vainolang-");
+        const git_describe = if (is_vainolang_tag)
+            git_describe_raw["vainolang-".len..]
+        else
+            git_describe_raw;
 
         switch (mem.countScalar(u8, git_describe, '-')) {
             0 => {
@@ -288,7 +293,8 @@ pub fn build(b: *std.Build) !void {
                 const commit_id = it.next().?;
 
                 const ancestor_ver = try std.SemanticVersion.parse(tagged_ancestor);
-                if (zig_version.order(ancestor_ver) != .gt) {
+                const version_order = zig_version.order(ancestor_ver);
+                if (version_order == .lt or (version_order == .eq and !is_vainolang_tag)) {
                     std.debug.print("Zig version '{f}' must be greater than tagged ancestor '{f}'\n", .{ zig_version, ancestor_ver });
                     std.process.exit(1);
                 }
