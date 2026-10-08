@@ -21,7 +21,8 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 ## V0 — Fork hygiene
 
 - [x] Fill in `README.md`: what Väinölang is, upstream policy, versioning.
-- [ ] Version string: `vaino-0.16.x` now, `vaino-0.17-pickN` as picks land.
+- [x] Version baseline: `vainolang-0.16.0`; use `vaino-0.17-pickN` naming
+      for the first selective 0.17 series.
 - [ ] `docs/VAINOLANG_SYNC.md`: cherry-pick ledger —
       upstream SHA → decision (take / defer / reject) + reason.
 - [ ] CI: nightly `git fetch zig-upstream`, list new 0.17 commits, no auto-merge.
