@@ -88,7 +88,56 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 5. Each extension ships with: langref example + host test + freestanding
    QEMU test.
 
-## V3 — Maintenance
+## V3 — Low-Level and Assembly Replacement
+
+Väinölang's long-term low-level goal is to replace as much hand-written
+assembly as the compiler and target ABI can safely support. This does not
+mean removing assembly unconditionally. Boot entries, interrupt return
+sequences, context switches, and other architecture-specific instruction
+windows may remain assembly when the compiler cannot provide equivalent
+guarantees.
+
+### V3.1 Language and compiler foundation
+
+- [ ] Document inline assembly constraints, clobbers, `volatile`, and
+      calling-convention guarantees for supported targets.
+- [ ] Add compile-time ABI checks for register arguments, stack alignment,
+      preserved registers, naked entry points, and interrupt boundaries.
+- [ ] Provide low-level helpers for volatile memory access, memory barriers,
+      MMIO registers, bitfields, CPU features, and address spaces.
+- [ ] Keep target-specific operations explicit; do not hide privileged
+      instructions behind portable APIs that cannot state their assumptions.
+
+### V3.2 Replacement order
+
+1. Register and MMIO helpers.
+2. UART and timer paths.
+3. Keyboard interrupt paths.
+4. Syscall wrappers and entry glue.
+5. User-mode entry and return.
+6. Context switching.
+7. Boot entry and the remaining architecture-specific paths.
+
+Every replacement keeps the original assembly implementation until the new
+implementation has equivalent evidence.
+
+### V3.3 Acceptance evidence
+
+- [ ] QEMU boot, interrupt, syscall, and user-mode tests pass.
+- [ ] Register preservation, stack layout, and calling convention are checked.
+- [ ] Generated disassembly is reviewed against the intended ABI contract.
+- [ ] Invalid ABI use has a negative compile-time or runtime test.
+- [ ] Performance and code-size differences are measured.
+- [ ] A tested assembly fallback remains available for unsupported targets.
+
+### V3.4 Initial Zinux targets
+
+The first candidates are `keyboard_irq.S`, timer and UART paths, and syscall
+wrappers. `context_switch.S`, `iretq`/`eret` transitions, and first-stage boot
+code are explicitly high-risk and remain assembly until Väinölang can express
+their register and stack guarantees precisely.
+
+## V4 — Maintenance
 
 - Stay on 0.16 base + cherry-pick ledger; full 0.17 rebase only when the
   Zinux `exp/vainolang` branch is green (host tests + smoke + full boot).
