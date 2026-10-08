@@ -1,0 +1,323 @@
+# LANGUAGE.md
+
+This document describes the Väinölang programming language: its current state, its direction, and the rules that govern divergence from Zig.
+
+**Language source of truth order:**
+
+1. Current Väinölang compiler implementation
+2. This file (`LANGUAGE.md`)
+3. Tests
+4. `AGENTS.md`
+5. `README.md`
+6. Zig 0.16 documentation / knowledge
+
+If this document and the implementation disagree, the implementation describes the current behavior, but it does not automatically define the intended language semantics.
+
+If the implementation is believed to be wrong, fix the implementation and update this document rather than documenting the bug as language behavior.
+
+---
+
+## 1. What Väinölang Is
+
+Väinölang is primarily a systems programming language, with Zinux and Väinö OS as its primary environments.
+
+It is currently derived from Zig 0.16.x. It is becoming an independent language.
+
+Väinölang is designed around the needs of low-level systems software: capabilities, isolation, precise hardware control, and as little assembly as practical.
+
+> **Zig is the starting point. Väinölang is the destination.**
+
+---
+
+## 2. Current Baseline
+
+The current implementation is based on:
+
+```text
+Zig 0.16.x
+```
+
+At this stage, most language behavior comes directly from Zig. This is temporary.
+
+- Code written today is largely Zig 0.16-shaped.
+- Differences from Zig 0.16 are not automatically bugs.
+- Compatibility with Zig is useful during the transition, but it is not the goal.
+
+### Transitional rule
+
+Unless explicitly documented otherwise, existing Zig 0.16 behavior remains the current behavior of Väinölang.
+
+However, new code must not assume that this behavior is permanent.
+
+### Selective Zig 0.17+ incorporation
+
+Newer Zig releases may contain improvements that serve Väinölang's goals. These are incorporated **selectively**, feature by feature — not by following upstream releases wholesale.
+
+A newer Zig feature is a candidate for adoption when it:
+
+- removes low-level ceremony
+- strengthens explicitness or safety without hiding the machine
+- simplifies compiler or toolchain work that Väinölang would otherwise need to recreate
+- provides useful low-level capabilities
+
+A Zig feature is not adopted merely because upstream adopted it.
+
+Every incorporated feature is recorded in [Divergences and Adoptions](#7-divergences-and-adoptions).
+
+---
+
+## 3. Direction of the Language
+
+Väinölang evolves along two axes simultaneously.
+
+### Axis A — Independence from Zig
+
+Gradually replace dependence on:
+
+- Zig syntax
+- Zig semantics
+- Zig compiler architecture
+- Zig build system
+- Zig linker model
+- Zig runtime
+- Zig standard library
+- Zig-specific terminology
+
+When a Väinölang-native design is practical, prefer it over inherited Zig behavior.
+
+### Axis B — Toward the machine
+
+Väinölang aims to make low-level hardware operations **first-class language capabilities** instead of escapes into assembly.
+
+The intended direction:
+
+```text
+Less assembly
+    ↓
+More low-level operations expressed in Väinölang
+    ↓
+Better compiler and hardware abstractions
+    ↓
+More of the operating system written in one language
+```
+
+The aim is not to hide the machine.
+
+The aim is to expose the machine directly through the language.
+
+---
+
+## 4. Planned Language Areas
+
+The following areas are **design targets, not current language features**.
+
+A feature must not be treated as implemented merely because it is listed here.
+
+Each divergence must be implemented explicitly, tested, and documented in this file.
+
+### 4.1 Low-level hardware capabilities
+
+First-class language and compiler support for:
+
+- CPU intrinsics — explicit and architecture-aware
+- Atomic operations — language primitives with explicit memory-order semantics
+- Memory barriers — expressible directly in Väinölang
+- Control registers and MSRs — exposed as language operations where appropriate
+- Interrupt primitives — enabling/disabling and state save/restore
+- Architecture-specific instructions — exposed through the toolchain when required
+- CPU feature detection — compile-time and runtime
+- ABI operations — calling conventions, frame layout, and link-time behavior
+- Linker and ELF support — Väinölang-owned abstractions where practical
+- Freestanding execution without unnecessary runtime assumptions
+
+Rule of thumb:
+
+> **If the compiler can provide a safe, explicit and efficient abstraction, the operating system should not implement it in assembly.**
+
+### 4.2 Memory model
+
+Zig's memory model may be reconsidered.
+
+Goals include:
+
+- explicit allocation and ownership suitable for kernel memory management
+- support for physically contiguous memory
+- support for DMA-safe memory
+- page-granular control
+- no hidden runtime assumptions
+- no implicit allocations where they would be inappropriate
+
+No final Väinölang memory model is defined here yet.
+
+### 4.3 Error handling
+
+Error handling must remain explicit and suitable for freestanding systems software.
+
+Changes are allowed when they:
+
+- reduce silent failure modes
+- make kernel error paths clearer
+- remain usable without a hidden runtime
+- avoid unnecessary allocation
+
+No final divergence from Zig's error model is defined here yet.
+
+### 4.4 Modules and compile-time execution
+
+Potential directions include:
+
+- a module system designed around kernel, driver, and userland layering
+- compile-time execution retained as a core strength
+- compile-time semantics eventually owned by Väinölang rather than inherited accidentally from Zig
+
+No final module or compile-time model is defined here yet.
+
+### 4.5 Standard library
+
+No traditional standard library is assumed.
+
+OS-facing libraries such as:
+
+- HAL
+- capability interfaces
+- driver runtime
+- kernel services
+
+are Zinux / Väinö OS components rather than automatically language components.
+
+A minimal freestanding core may eventually be defined and owned by Väinölang.
+
+### 4.6 Build system
+
+The current build system is transitional Zig infrastructure.
+
+The long-term goal is a Väinölang-owned build and link model.
+
+This may eventually include:
+
+- Väinölang-native build descriptions
+- Väinölang-native linking
+- Väinölang-owned linker abstractions
+- reduced dependence on Zig's build system
+
+---
+
+## 5. Assembly Policy
+
+Assembly is an implementation detail, not the desired programming model.
+
+For every piece of assembly:
+
+```text
+Assembly
+   │
+   ├── genuinely required?  →  keep
+   │
+   └── compiler limitation?  →  improve Väinölang
+```
+
+Rules:
+
+- Do not add assembly merely because Zig currently uses it.
+- Prefer a Väinölang abstraction when it provides the required control.
+- Keep assembly when the hardware or target architecture genuinely requires it.
+- Do not pursue zero assembly as an ideological goal.
+
+The project aims to discover how little assembly an operating system actually needs when the language and compiler are designed for the machine.
+
+---
+
+## 6. Documentation Rule for Language Changes
+
+A language change normally requires:
+
+```text
+implementation
+      ↓
+tests
+      ↓
+LANGUAGE.md
+      ↓
+AGENTS.md
+(if agent assumptions changed)
+```
+
+Never silently introduce new language semantics.
+
+When a language behavior intentionally diverges from Zig:
+
+1. implement it explicitly
+2. add or update tests
+3. document the behavior here
+4. explain why the divergence exists
+5. update `AGENTS.md` if it changes how agents should work
+
+---
+
+## 7. Divergences and Adoptions
+
+This section is the registry of intentional differences from Zig 0.16 and selectively adopted features from newer Zig releases.
+
+Every entry should explain:
+
+- what changed
+- Väinölang's behavior
+- why the change exists
+- which tests cover it
+
+### Divergences from Zig 0.16
+
+| # | Area | Status | Väinölang behavior | Reason | Tests |
+|---|------|--------|--------------------|--------|-------|
+| — | *(none recorded yet)* | — | — | — | — |
+
+### Adopted from Zig 0.17+
+
+| # | Feature | Source | Status | Reason | Tests |
+|---|---------|--------|--------|--------|-------|
+| — | *(none recorded yet)* | — | — | — | — |
+
+This registry is part of the language history.
+
+Do not silently change a language feature without recording the intentional divergence.
+
+---
+
+## 8. Status
+
+Väinölang is experimental.
+
+The compiler and language are expected to change substantially as Zinux and Väinö OS develop.
+
+This document describes both current behavior and future design intent.
+
+Where this document says:
+
+- **current** — the behavior is intended to describe the language as it exists now
+- **transitional** — the behavior exists primarily because of the Zig 0.16 foundation
+- **planned** — the feature is a design target, not an implemented language feature
+- **candidate** — the feature is being considered but has no committed design
+
+The current implementation remains authoritative for what the compiler actually does.
+
+The purpose of this document is to ensure that current behavior, intended semantics, and future direction do not become confused.
+
+---
+
+## 9. Core Principles
+
+Keep these principles in mind when evolving Väinölang:
+
+> **Zig is the starting point.**
+>
+> **Väinölang is the destination.**
+>
+> Compatibility is transitional; independence is the goal.
+>
+> Do not hide the machine. Expose it through the language.
+>
+> Prefer language capabilities over unnecessary assembly.
+>
+> Do not introduce differences merely for the sake of being different.
+>
+> Every intentional divergence must be explicit, tested, and documented.
