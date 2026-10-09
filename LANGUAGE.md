@@ -269,7 +269,7 @@ Every entry should explain:
 
 | # | Area | Status | Väinölang behavior | Reason | Tests |
 |---|------|--------|--------------------|--------|-------|
-| — | *(none recorded yet)* | — | — | — | — |
+| V-1 | Opt-in `vaino` module | **current** (v1) | Versioned `vaino` module (`libs/vaino.zig` in Zinux): capability `Rights` mask constants + `toMask`/`fromMask`/`narrow` helpers, MMIO `packed struct` + `volatile` read/write patterns, `vaino-version` stamp + `build -Dvaino` flag. Only active via explicit `@import("vaino")`; default build has no language change. | Centralize `@bitCast` conversions in one audited place ahead of the 0.17 `@bitCast` semantic change; reduce repetition without implicit semantics. | Zinux `tests/host/vaino_test.zig` (host) + kernel freestanding compile via `@import("vaino")` in `kernel/main.zig`; QEMU boot unchanged (default `-Dvaino=false`). |
 
 ### Adopted from Zig 0.17+
 
