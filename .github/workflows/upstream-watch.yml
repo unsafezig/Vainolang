@@ -1,0 +1,43 @@
+# Upstream watch — nightly `git fetch zig-upstream`, list new 0.17 commits.
+#
+# Väinölang ROADMAP V0: no auto-merge. Triage happens manually in
+# docs/VAINOLANG_SYNC.md (take / defer / reject + reason).
+#
+# NOTE: this repo inherits .forgejo/workflows/ci.yaml from upstream Zig
+# (Forgejo + self-hosted runners + master branch — not active here).
+# The repo lives on GitHub, so the watch runs here on ubuntu-latest.
+
+name: upstream-watch
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "List upstream commits newer than (git --since argument)"
+        required: false
+        default: "7 days ago"
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add zig-upstream remote
+        run: |
+          git remote get-url zig-upstream >/dev/null 2>&1 || \
+            git remote add zig-upstream https://codeberg.org/ziglang/zig.git
+          git remote -v
+
+      - name: List new upstream commits
+        run: |
+          sh ci/upstream-watch.sh "${{ inputs.since || '7 days ago' }}"
