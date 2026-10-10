@@ -383,7 +383,7 @@ fn processGenericInstruction(ass: *Assembler) !?AsmValue {
             },
             .string => |offset| {
                 const text = std.mem.sliceTo(ass.inst.string_bytes.items[offset..], 0);
-                const size = std.math.divCeil(usize, text.len + 1, @sizeOf(Word)) catch unreachable;
+                const size = @divCeil(text.len + 1, @sizeOf(Word));
                 try section.ensureUnusedCapacity(module.gpa, size);
                 section.writeOperand(spec.LiteralString, text);
             },
