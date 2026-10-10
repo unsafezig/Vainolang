@@ -4730,11 +4730,13 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             bindings.LLVMInitializeAArch64AsmParser();
         },
         .amdgcn => {
-            bindings.LLVMInitializeAMDGPUTarget();
-            bindings.LLVMInitializeAMDGPUTargetInfo();
-            bindings.LLVMInitializeAMDGPUTargetMC();
-            bindings.LLVMInitializeAMDGPUAsmPrinter();
-            bindings.LLVMInitializeAMDGPUAsmParser();
+            if (build_options.llvm_has_amdgpu) {
+                bindings.LLVMInitializeAMDGPUTarget();
+                bindings.LLVMInitializeAMDGPUTargetInfo();
+                bindings.LLVMInitializeAMDGPUTargetMC();
+                bindings.LLVMInitializeAMDGPUAsmPrinter();
+                bindings.LLVMInitializeAMDGPUAsmParser();
+            }
         },
         .thumb, .thumbeb, .arm, .armeb => {
             bindings.LLVMInitializeARMTarget();
@@ -4744,11 +4746,13 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             bindings.LLVMInitializeARMAsmParser();
         },
         .avr => {
-            bindings.LLVMInitializeAVRTarget();
-            bindings.LLVMInitializeAVRTargetInfo();
-            bindings.LLVMInitializeAVRTargetMC();
-            bindings.LLVMInitializeAVRAsmPrinter();
-            bindings.LLVMInitializeAVRAsmParser();
+            if (build_options.llvm_has_avr) {
+                bindings.LLVMInitializeAVRTarget();
+                bindings.LLVMInitializeAVRTargetInfo();
+                bindings.LLVMInitializeAVRTargetMC();
+                bindings.LLVMInitializeAVRAsmPrinter();
+                bindings.LLVMInitializeAVRAsmParser();
+            }
         },
         .bpfel, .bpfeb => {
             bindings.LLVMInitializeBPFTarget();
@@ -4758,32 +4762,40 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             bindings.LLVMInitializeBPFAsmParser();
         },
         .hexagon => {
-            bindings.LLVMInitializeHexagonTarget();
-            bindings.LLVMInitializeHexagonTargetInfo();
-            bindings.LLVMInitializeHexagonTargetMC();
-            bindings.LLVMInitializeHexagonAsmPrinter();
-            bindings.LLVMInitializeHexagonAsmParser();
+            if (build_options.llvm_has_hexagon) {
+                bindings.LLVMInitializeHexagonTarget();
+                bindings.LLVMInitializeHexagonTargetInfo();
+                bindings.LLVMInitializeHexagonTargetMC();
+                bindings.LLVMInitializeHexagonAsmPrinter();
+                bindings.LLVMInitializeHexagonAsmParser();
+            }
         },
         .lanai => {
-            bindings.LLVMInitializeLanaiTarget();
-            bindings.LLVMInitializeLanaiTargetInfo();
-            bindings.LLVMInitializeLanaiTargetMC();
-            bindings.LLVMInitializeLanaiAsmPrinter();
-            bindings.LLVMInitializeLanaiAsmParser();
+            if (build_options.llvm_has_lanai) {
+                bindings.LLVMInitializeLanaiTarget();
+                bindings.LLVMInitializeLanaiTargetInfo();
+                bindings.LLVMInitializeLanaiTargetMC();
+                bindings.LLVMInitializeLanaiAsmPrinter();
+                bindings.LLVMInitializeLanaiAsmParser();
+            }
         },
         .mips, .mipsel, .mips64, .mips64el => {
-            bindings.LLVMInitializeMipsTarget();
-            bindings.LLVMInitializeMipsTargetInfo();
-            bindings.LLVMInitializeMipsTargetMC();
-            bindings.LLVMInitializeMipsAsmPrinter();
-            bindings.LLVMInitializeMipsAsmParser();
+            if (build_options.llvm_has_mips) {
+                bindings.LLVMInitializeMipsTarget();
+                bindings.LLVMInitializeMipsTargetInfo();
+                bindings.LLVMInitializeMipsTargetMC();
+                bindings.LLVMInitializeMipsAsmPrinter();
+                bindings.LLVMInitializeMipsAsmParser();
+            }
         },
         .msp430 => {
-            bindings.LLVMInitializeMSP430Target();
-            bindings.LLVMInitializeMSP430TargetInfo();
-            bindings.LLVMInitializeMSP430TargetMC();
-            bindings.LLVMInitializeMSP430AsmPrinter();
-            bindings.LLVMInitializeMSP430AsmParser();
+            if (build_options.llvm_has_msp430) {
+                bindings.LLVMInitializeMSP430Target();
+                bindings.LLVMInitializeMSP430TargetInfo();
+                bindings.LLVMInitializeMSP430TargetMC();
+                bindings.LLVMInitializeMSP430AsmPrinter();
+                bindings.LLVMInitializeMSP430AsmParser();
+            }
         },
         .nvptx, .nvptx64 => {
             bindings.LLVMInitializeNVPTXTarget();
@@ -4793,11 +4805,13 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             // There is no LLVMInitializeNVPTXAsmParser function available.
         },
         .powerpc, .powerpcle, .powerpc64, .powerpc64le => {
-            bindings.LLVMInitializePowerPCTarget();
-            bindings.LLVMInitializePowerPCTargetInfo();
-            bindings.LLVMInitializePowerPCTargetMC();
-            bindings.LLVMInitializePowerPCAsmPrinter();
-            bindings.LLVMInitializePowerPCAsmParser();
+            if (build_options.llvm_has_powerpc) {
+                bindings.LLVMInitializePowerPCTarget();
+                bindings.LLVMInitializePowerPCTargetInfo();
+                bindings.LLVMInitializePowerPCTargetMC();
+                bindings.LLVMInitializePowerPCAsmPrinter();
+                bindings.LLVMInitializePowerPCAsmParser();
+            }
         },
         .riscv32, .riscv32be, .riscv64, .riscv64be => {
             bindings.LLVMInitializeRISCVTarget();
@@ -4807,18 +4821,22 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             bindings.LLVMInitializeRISCVAsmParser();
         },
         .sparc, .sparc64 => {
-            bindings.LLVMInitializeSparcTarget();
-            bindings.LLVMInitializeSparcTargetInfo();
-            bindings.LLVMInitializeSparcTargetMC();
-            bindings.LLVMInitializeSparcAsmPrinter();
-            bindings.LLVMInitializeSparcAsmParser();
+            if (build_options.llvm_has_sparc) {
+                bindings.LLVMInitializeSparcTarget();
+                bindings.LLVMInitializeSparcTargetInfo();
+                bindings.LLVMInitializeSparcTargetMC();
+                bindings.LLVMInitializeSparcAsmPrinter();
+                bindings.LLVMInitializeSparcAsmParser();
+            }
         },
         .s390x => {
-            bindings.LLVMInitializeSystemZTarget();
-            bindings.LLVMInitializeSystemZTargetInfo();
-            bindings.LLVMInitializeSystemZTargetMC();
-            bindings.LLVMInitializeSystemZAsmPrinter();
-            bindings.LLVMInitializeSystemZAsmParser();
+            if (build_options.llvm_has_systemz) {
+                bindings.LLVMInitializeSystemZTarget();
+                bindings.LLVMInitializeSystemZTargetInfo();
+                bindings.LLVMInitializeSystemZTargetMC();
+                bindings.LLVMInitializeSystemZAsmPrinter();
+                bindings.LLVMInitializeSystemZAsmParser();
+            }
         },
         .wasm32, .wasm64 => {
             bindings.LLVMInitializeWebAssemblyTarget();
@@ -4844,11 +4862,13 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             }
         },
         .xcore => {
-            bindings.LLVMInitializeXCoreTarget();
-            bindings.LLVMInitializeXCoreTargetInfo();
-            bindings.LLVMInitializeXCoreTargetMC();
-            bindings.LLVMInitializeXCoreAsmPrinter();
-            // There is no LLVMInitializeXCoreAsmParser function.
+            if (build_options.llvm_has_xcore) {
+                bindings.LLVMInitializeXCoreTarget();
+                bindings.LLVMInitializeXCoreTargetInfo();
+                bindings.LLVMInitializeXCoreTargetMC();
+                bindings.LLVMInitializeXCoreAsmPrinter();
+                // There is no LLVMInitializeXCoreAsmParser function.
+            }
         },
         .m68k => {
             if (build_options.llvm_has_m68k) {
@@ -4869,11 +4889,13 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             }
         },
         .ve => {
-            bindings.LLVMInitializeVETarget();
-            bindings.LLVMInitializeVETargetInfo();
-            bindings.LLVMInitializeVETargetMC();
-            bindings.LLVMInitializeVEAsmPrinter();
-            bindings.LLVMInitializeVEAsmParser();
+            if (build_options.llvm_has_ve) {
+                bindings.LLVMInitializeVETarget();
+                bindings.LLVMInitializeVETargetInfo();
+                bindings.LLVMInitializeVETargetMC();
+                bindings.LLVMInitializeVEAsmPrinter();
+                bindings.LLVMInitializeVEAsmParser();
+            }
         },
         .arc => {
             if (build_options.llvm_has_arc) {
@@ -4885,19 +4907,23 @@ pub fn initializeLLVMTarget(arch: std.Target.Cpu.Arch) void {
             }
         },
         .loongarch32, .loongarch64 => {
-            bindings.LLVMInitializeLoongArchTarget();
-            bindings.LLVMInitializeLoongArchTargetInfo();
-            bindings.LLVMInitializeLoongArchTargetMC();
-            bindings.LLVMInitializeLoongArchAsmPrinter();
-            bindings.LLVMInitializeLoongArchAsmParser();
+            if (build_options.llvm_has_loongarch) {
+                bindings.LLVMInitializeLoongArchTarget();
+                bindings.LLVMInitializeLoongArchTargetInfo();
+                bindings.LLVMInitializeLoongArchTargetMC();
+                bindings.LLVMInitializeLoongArchAsmPrinter();
+                bindings.LLVMInitializeLoongArchAsmParser();
+            }
         },
         .spirv32,
         .spirv64,
         => {
-            bindings.LLVMInitializeSPIRVTarget();
-            bindings.LLVMInitializeSPIRVTargetInfo();
-            bindings.LLVMInitializeSPIRVTargetMC();
-            bindings.LLVMInitializeSPIRVAsmPrinter();
+            if (build_options.llvm_has_spirv) {
+                bindings.LLVMInitializeSPIRVTarget();
+                bindings.LLVMInitializeSPIRVTargetInfo();
+                bindings.LLVMInitializeSPIRVTargetMC();
+                bindings.LLVMInitializeSPIRVAsmPrinter();
+            }
         },
 
         // LLVM does does not have a backend for these.

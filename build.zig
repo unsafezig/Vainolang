@@ -130,6 +130,22 @@ pub fn build(b: *std.Build) !void {
         "llvm-has-xtensa",
         "Whether LLVM has the experimental target xtensa enabled",
     ) orelse false;
+    // Vainolang: the LLVM distribution may ship a subset of targets
+    // (upstream release tarballs omit GPU/exotic backends). Each defaults
+    // to false; codegen/llvm.zig skips init calls for absent targets.
+    const llvm_has_amdgpu = b.option(bool, "llvm-has-amdgpu", "Whether LLVM has the amdgpu target enabled") orelse false;
+    const llvm_has_avr = b.option(bool, "llvm-has-avr", "Whether LLVM has the avr target enabled") orelse false;
+    const llvm_has_hexagon = b.option(bool, "llvm-has-hexagon", "Whether LLVM has the hexagon target enabled") orelse false;
+    const llvm_has_lanai = b.option(bool, "llvm-has-lanai", "Whether LLVM has the lanai target enabled") orelse false;
+    const llvm_has_mips = b.option(bool, "llvm-has-mips", "Whether LLVM has the mips target enabled") orelse false;
+    const llvm_has_msp430 = b.option(bool, "llvm-has-msp430", "Whether LLVM has the msp430 target enabled") orelse false;
+    const llvm_has_powerpc = b.option(bool, "llvm-has-powerpc", "Whether LLVM has the powerpc target enabled") orelse false;
+    const llvm_has_sparc = b.option(bool, "llvm-has-sparc", "Whether LLVM has the sparc target enabled") orelse false;
+    const llvm_has_spirv = b.option(bool, "llvm-has-spirv", "Whether LLVM has the spirv target enabled") orelse false;
+    const llvm_has_systemz = b.option(bool, "llvm-has-systemz", "Whether LLVM has the systemz target enabled") orelse false;
+    const llvm_has_ve = b.option(bool, "llvm-has-ve", "Whether LLVM has the ve target enabled") orelse false;
+    const llvm_has_xcore = b.option(bool, "llvm-has-xcore", "Whether LLVM has the xcore target enabled") orelse false;
+    const llvm_has_loongarch = b.option(bool, "llvm-has-loongarch", "Whether LLVM has the loongarch target enabled") orelse false;
     const enable_ios_sdk = b.option(bool, "enable-ios-sdk", "Run tests requiring presence of iOS SDK and frameworks") orelse false;
     const enable_macos_sdk = b.option(bool, "enable-macos-sdk", "Run tests requiring presence of macOS SDK and frameworks") orelse enable_ios_sdk;
     const enable_symlinks_windows = b.option(bool, "enable-symlinks-windows", "Run tests requiring presence of symlinks on Windows") orelse false;
@@ -237,6 +253,19 @@ pub fn build(b: *std.Build) !void {
     exe_options.addOption(bool, "llvm_has_csky", llvm_has_csky);
     exe_options.addOption(bool, "llvm_has_arc", llvm_has_arc);
     exe_options.addOption(bool, "llvm_has_xtensa", llvm_has_xtensa);
+    exe_options.addOption(bool, "llvm_has_amdgpu", llvm_has_amdgpu);
+    exe_options.addOption(bool, "llvm_has_avr", llvm_has_avr);
+    exe_options.addOption(bool, "llvm_has_hexagon", llvm_has_hexagon);
+    exe_options.addOption(bool, "llvm_has_lanai", llvm_has_lanai);
+    exe_options.addOption(bool, "llvm_has_mips", llvm_has_mips);
+    exe_options.addOption(bool, "llvm_has_msp430", llvm_has_msp430);
+    exe_options.addOption(bool, "llvm_has_powerpc", llvm_has_powerpc);
+    exe_options.addOption(bool, "llvm_has_sparc", llvm_has_sparc);
+    exe_options.addOption(bool, "llvm_has_spirv", llvm_has_spirv);
+    exe_options.addOption(bool, "llvm_has_systemz", llvm_has_systemz);
+    exe_options.addOption(bool, "llvm_has_ve", llvm_has_ve);
+    exe_options.addOption(bool, "llvm_has_xcore", llvm_has_xcore);
+    exe_options.addOption(bool, "llvm_has_loongarch", llvm_has_loongarch);
     exe_options.addOption(bool, "debug_gpa", debug_gpa);
     exe_options.addOption(DevEnv, "dev", b.option(DevEnv, "dev", "Build a compiler with a reduced feature set for development of specific features") orelse if (only_c) .bootstrap else .full);
     exe_options.addOption(IoMode, "io_mode", io_mode);

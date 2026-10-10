@@ -3,6 +3,21 @@ pub const llvm_has_m68k = false;
 pub const llvm_has_csky = false;
 pub const llvm_has_arc = false;
 pub const llvm_has_xtensa = false;
+// Vainolang: LLVM distribution may ship a target subset (see CMakeLists
+// NOTFOUND filter); guards in src/codegen/llvm.zig skip absent targets.
+pub const llvm_has_amdgpu = false;
+pub const llvm_has_avr = false;
+pub const llvm_has_hexagon = false;
+pub const llvm_has_lanai = false;
+pub const llvm_has_mips = false;
+pub const llvm_has_msp430 = false;
+pub const llvm_has_powerpc = false;
+pub const llvm_has_sparc = false;
+pub const llvm_has_spirv = false;
+pub const llvm_has_systemz = false;
+pub const llvm_has_ve = false;
+pub const llvm_has_xcore = false;
+pub const llvm_has_loongarch = false;
 pub const version: [:0]const u8 = "@RESOLVED_ZIG_VERSION@";
 pub const semver = @import("std").SemanticVersion.parse(version) catch unreachable;
 pub const enable_debug_extensions = false;

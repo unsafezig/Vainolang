@@ -159,6 +159,13 @@ if(ZIG_STATIC_ZSTD)
     list(APPEND LLVM_LIBRARIES "${ZSTD}")
 endif()
 
+# Vainolang: tolerate LLVM distributions that ship a subset of targets
+# (upstream release tarballs omit e.g. GPU/exotic backends, leaving
+# -NOTFOUND entries). Drop them so the link only uses shipped libraries;
+# the matching `llvm_has_*` guards in src/codegen/llvm.zig skip init calls
+# for the absent targets.
+list(FILTER LLVM_LIBRARIES EXCLUDE REGEX "-NOTFOUND$")
+
 if (MSVC)
     if(NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
         if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
