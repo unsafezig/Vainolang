@@ -3579,13 +3579,12 @@ fn airDivCeil(self: *FuncGen, inst: Air.Inst.Index, fast: Builder.FastMathKind) 
         return self.buildFloatOp(.ceil, fast, inst_ty, 1, .{result});
     }
     if (scalar_ty.isSignedInt(zcu)) {
-        const scalar_llvm_ty = try o.lowerType(scalar_ty, .by_value);
-        const inst_llvm_ty = try o.lowerType(inst_ty, .by_value);
+        const scalar_llvm_ty = try o.lowerType(scalar_ty);
+        const inst_llvm_ty = try o.lowerType(inst_ty);
 
         const ExpectedContents = [std.math.big.int.calcTwosCompLimbCount(256)]std.math.big.Limb;
-        var bfa_buf: ExpectedContents = undefined;
-        var bfa: std.heap.BufferFirstAllocator = .init(@ptrCast(&bfa_buf), self.gpa);
-        const allocator = bfa.allocator();
+        var stack_fallback = std.heap.stackFallback(@sizeOf(ExpectedContents), self.gpa);
+        const allocator = stack_fallback.get();
 
         const scalar_bits = scalar_ty.intInfo(zcu).bits;
         var smin_big_int: std.math.big.int.Mutable = .{
@@ -3619,8 +3618,8 @@ fn airDivCeil(self: *FuncGen, inst: Air.Inst.Index, fast: Builder.FastMathKind) 
         const correction = try self.wip.cast(.zext, need_correction, inst_llvm_ty, "divCeil.correction");
         return self.wip.bin(.@"add nsw", div, correction, "divCeil");
     } else {
-        const scalar_llvm_ty = try o.lowerType(scalar_ty, .by_value);
-        const inst_llvm_ty = try o.lowerType(inst_ty, .by_value);
+        const scalar_llvm_ty = try o.lowerType(scalar_ty);
+        const inst_llvm_ty = try o.lowerType(inst_ty);
 
         const zero = try o.builder.splatValue(
             inst_llvm_ty,

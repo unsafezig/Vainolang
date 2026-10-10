@@ -2454,7 +2454,7 @@ fn divCeilBlockPayload(
                 Type.u1;
 
             const adjust_u1_ref = main_block.addBitCast(l, adjust_u1_ty, need_adjust_inst.toRef());
-            const adjust_inst = main_block.addTyOp(l, .int_cast, operand_ty, adjust_u1_ref);
+            const adjust_inst = main_block.addTyOp(l, .intcast, operand_ty, adjust_u1_ref);
 
             const result_inst = main_block.add(l, .{
                 .tag = .add,
