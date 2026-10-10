@@ -275,7 +275,7 @@ Every entry should explain:
 
 | # | Feature | Source | Status | Reason | Tests |
 |---|---------|--------|--------|--------|-------|
-| — | *(none recorded yet)* | — | — | — | — |
+| A-1 | `@divCeil` builtin | Zig 0.17 (`f810faa828` + 3 follow-ups, adapted) | **branch** (`exp/divceil`; main-merge needs broader matrix) | Kernel alignment/size math without hand-rolled helpers; purely additive, no migration | New stage3 on self-built LLVM 21: behavior slice/math + std math 5124/5142 pass, div compile-error cases 25/25 (native, Debug+ReleaseSafe); `@divCeil` end-to-end demo |
 
 This registry is part of the language history.
 

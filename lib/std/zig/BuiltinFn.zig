@@ -35,6 +35,7 @@ pub const Tag = enum {
     c_va_copy,
     c_va_end,
     c_va_start,
+    div_ceil,
     div_exact,
     div_floor,
     div_trunc,
@@ -426,6 +427,13 @@ pub const list = list: {
             "@divFloor",
             .{
                 .tag = .div_floor,
+                .param_count = 2,
+            },
+        },
+        .{
+            "@divCeil",
+            .{
+                .tag = .div_ceil,
                 .param_count = 2,
             },
         },

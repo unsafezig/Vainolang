@@ -25,7 +25,7 @@ fork. Every 0.17 change that is evaluated gets an entry before it is merged.
 | `cb4c344e19` `@backingInt` / `@fromBackingInt` implementation | Compiler | Defer as a cohesive series | 60 files across type resolution, codegen, stage1 and tests; validate on a dedicated integration branch |
 | `1edc5d7d67` + `92038675af` `FindProgram` (lazy + non-lazy) | Build system | Defer until maker/configurer split is taken | Both commits target `lib/compiler/Maker/` + `lib/compiler/configurer.zig`, which do not exist on the 0.16 base; cherry-pick would drag in the full build-system rework (V1.2). Consumer benefit (tool lookup for `xorriso`/`qemu`/`cc`) delivered 0.16-compatibly where possible; Zig 0.16 already ships non-lazy `std.Build.findProgram` |
 | 0.17 run-step args rework (`b.args` → passthru model) | Build system | Defer until maker/configurer split is taken | Part of the split-era `Run` step rework; same entanglement as `FindProgram`. Consumer benefit (extra QEMU args without editing `build.zig`) delivered 0.16-compatibly via `-Dqemu-args` on the Zinux `exp/vainolang` branch |
-| `f810faa828` + `73f6d498fc` + `efcaf6a72d` + `e42cb3b236` `@divCeil` full series | Compiler | Defer to integration branch (needs compiler build) | Purely additive builtin (no migration risk). Friction measured 2026-10-10 (`cherry-pick -n` on scratch branch, discarded): impl commit touches 28 files, only 2 textual hunks (`src/codegen/wasm/CodeGen.zig`, `test/behavior/math.zig`) + 1 delete/modify (`src/Air/Verify.zig`) — small. Still blocked on a compiler build host (LLVM) + behavior-test matrix; blind merge would violate the take-only-when-green rule |
+| `f810faa828` + `73f6d498fc` + `efcaf6a72d` + `e42cb3b236` `@divCeil` full series | Compiler | **TAKE on `exp/divceil` (validated)** | Purely additive builtin.Validated 2026-10-10 on self-built stage3 (LLVM 21.1.3-gnu, this machine): native `x86_64-windows-gnu`, Debug+ReleaseSafe — behavior slice/math + std math suites 5124/5142 pass (18 skipped, same skips as baseline 5112/5130), div compile-error cases 25/25, `@divCeil` end-to-end demo correct. Adaptations to 0.16 base (no behavior change): `int_cast`→`intcast`, `lowerType` 2-arg→1-arg, `BufferFirstAllocator`→`stackFallback`, divCeil-call-for-call only (upstream refactors/renames declined); `Air/Verify.zig` hunk skipped (file absent on base; covered by `Liveness/Verify.zig` +2 which applied); wasm backend: graceful `fail` (needs upstream scalarize framework); `math.zig` shl-test + `bitCastVal`/`addTyOp` + `diw` refactors declined. Bootstrap ladder used: impl-only → stage3-A → full series → stage3-B (old zig1 cannot analyze `@divCeil` self-uses; Jul-17 upstream wasm rejected — enforces 0.17 fmt rules on 0.16 sources — so ladder instead). ZIR cache MUST be isolated per compiler (`--global-cache-dir`/`--cache-dir`); shared cache poisons tag numbering and crashes. Main-merge needs the broader matrix (more targets/modes) |
 | `39967484d5` slice deref/coercion series (`e69d19d1ee` + `adef113102` + `1dd6921772`) | Compiler (Sema) | Defer to integration branch (needs compiler build) | Direct dereference of + coercion `[]T`→`*[n]T` for comptime-known slices; helps `kernel/loader` ELF parsing. Friction measured 2026-10-10 (`cherry-pick -n` on scratch branch, discarded): first commit gives 3 single-hunk conflicts (`lib/std/zig/Zir.zig`, `src/Sema.zig`, `test/behavior/slice.zig`); `src/Zcu/PerThread.zig` merges cleanly (exists on base). Small, but unvalidatable here — same build-host blocker |
 | `cf8120f58f` grammar/parser-oracle merge (~10 commits) | Compiler (frontend) | Defer to integration branch | Parser/spec agreement + backtracking fixes; but includes `build.zig` oracle-step changes (build-system entanglement) and alters accepted-syntax edge cases → needs full behavior-test matrix |
 | `b0e7ebc24f` `std.Build.Cache` rework (is_directory + binary manifest) | Build system | Defer until maker/configurer split is taken | Split-era cache; consumer benefit (correct invalidation of embedded ELFs) already delivered 0.16-compatibly via `UpdateSourceFiles` on Zinux `exp/vainolang` (`e887bc8`) |
@@ -33,16 +33,18 @@ fork. Every 0.17 change that is evaluated gets an entry before it is merged.
 | `7db2ef6104` `zig fmt --complexity` | Tooling | Defer (blocked on compiler-build capacity) | Small additive tool (1 file, `src/fmt.zig` +32/−14); lowest-friction take candidate — first in line when a compiler build host exists |
 | aarch64 target hardening / ARM+SPARC stack traces | Backend/targets | Track only (no isolated series identified) | No single cherry-pickable series found in 0.17.x log; watch upstream, revisit with a named SHA |
 
-## Structural finding (2026-10-10 triage)
+## Structural finding (2026-10-10 triage, updated: build capacity ESTABLISHED)
 
-All compiler-side 0.17 takes share one blocker: **no compiler-build
-capacity on the current host** (LLVM build + full behavior-test matrix).
-Per the take-only-when-green rule, every such series stays *defer* until
-an integration branch can be built and tested elsewhere. Build-system
-takes share a second blocker: the **maker/configurer split**. Consumer-side
-benefits already delivered 0.16-compatibly: `UpdateSourceFiles` copies
-(cache rework), `-Dqemu-args` (run-step passthru), `vaino` Rights helpers
-(`@bitCast` audit).
+Compiler-side 0.17 takes shared one blocker: **no compiler-build
+capacity on the current host**. That blocker is now REMOVED for this
+machine: LLVM 21.1.3 + zlib + zstd built from source with `zig cc`
+(gnu-consistent) in `~/deps`, and a self-built stage3 validated green.
+Recipe + pitfalls (MSVC-tarball STL wall, zstd `DEFAULTLIB` directives,
+`ar.cmd` shim, `-j4` OOM guard, isolated ZIR caches, bootstrap ladder for
+self-using features) are this machine's institutional knowledge — reusing
+it makes the next take (deref series) a fraction of the cost. `@divCeil`
+is the first take through the new pipeline (`exp/divceil`). Build-system
+takes still share the second blocker: the **maker/configurer split**.
 
 ## Entry format
 

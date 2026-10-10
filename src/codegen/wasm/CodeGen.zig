@@ -1384,6 +1384,10 @@ fn genInst(cg: *CodeGen, inst: Air.Inst.Index) InnerError!void {
             const result = try cg.floatDiv(.fromType(cg, ty), lhs, rhs);
             try cg.finishAir(inst, result, &.{ bin_op.lhs, bin_op.rhs });
         },
+        // Vainolang: div_ceil codegen for wasm needs the upstream scalarize
+        // framework (not taken); fail gracefully instead of hitting an
+        // exhaustive-switch fellow traveler or an `unreachable`.
+        .div_ceil, .div_ceil_optimized => return cg.fail("TODO: implement AIR op: div_ceil for wasm", .{}),
         .div_exact => {
             const bin_op = cg.air.instructions.items(.data)[@intFromEnum(inst)].bin_op;
             const lhs = try cg.resolveInst(bin_op.lhs);
