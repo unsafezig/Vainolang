@@ -5,7 +5,8 @@
 > takes the best parts ("rusinat pullasta") via selective cherry-picks
 > and adds only small, opt-in Väinö extensions.
 
-**Base:** Zig 0.16 (`Start from Zig 0.16`).
+**Base:** Zig 0.16 (start from Zig 0.16).
+
 **Strategy (decided):** stay on the 0.16 base, cherry-pick selected 0.17
 commits. No full 0.17 rebase until the migration is green in the Zinux
 experiment branch. Start work on 0.17.0 immediately; track 0.17.1 fixes.
@@ -22,18 +23,20 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 
 - [x] Fill in `README.md`: what Väinölang is, upstream policy, versioning.
 - [x] Version baseline: `vainolang-0.16.0`; use `vaino-0.17-pickN` naming
-      for the first selective 0.17 series.
+  for the first selective 0.17 series.
 - [x] `docs/VAINOLANG_SYNC.md`: cherry-pick ledger —
-      upstream SHA → decision (take / defer / reject) + reason.
+  upstream SHA → decision (take / defer / reject) + reason.
 - [x] CI: nightly `git fetch zig-upstream`, list new 0.17 commits, no auto-merge
-      (`.github/workflows/upstream-watch.yml` + `ci/upstream-watch.sh`).
+  (`.github/workflows/upstream-watch.yml` + `ci/upstream-watch.sh`).
+
+---
 
 ## V1 — Zig 0.17 triage
 
 ### V1.1 Take as-is (the "rusinat")
 
 | Feature | Why it matters for Väinö/Zinux |
-|---|---|
+|---------|--------------------------------|
 | `@divCeil` | Kernel alignment and size math without hand-rolled helpers; take as a complete upstream dependency series |
 | `@backingInt` / `@fromBackingInt` | Explicit int↔enum conversion for capability `Rights`/audit codes; take as a complete upstream dependency series |
 | Deref/coercion of `comptime`-length slices to array pointers | ELF loader parsing (`kernel/loader`) |
@@ -48,7 +51,7 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 ### V1.2 Take with migration (breaking changes, work required)
 
 | Change | Migration work |
-|---|---|
+|--------|----------------|
 | `@bitCast` = logical bits, not memory layout; `extern struct/union` casts banned; array/vector casts may change **silently** | Manual audit: `kernel/ipc/capability_core.zig`, `kernel/syscall/dispatch.zig`, `kernel/arch/x86_64/paging.zig`, `kernel/arch/aarch64/semihost_file.zig`, `tools/linux_hello.zig`, all MMIO `packed struct` code |
 | `@hasDecl` → `true` only for `public` decls | Audit reflection code taking the private-member branch |
 | `void{}` removed; array `*` removed (→ `@splat`); `errdefer \|e\|` capture removed; `i0` removed; `internal`/`link_once` removed | Mechanical `grep` + `zig fmt` pass over Zinux tree |
@@ -63,11 +66,11 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 - LoongArch/Xtensa experiments, COFF extensions (until a Windows host need exists).
 - New linker test framework — adopt ideas, not the framework.
 - Fuzzer — unchanged in 0.17, nothing to take.
-- PowerPC/glibc target drops — no effect on `x86_64`-freestanding.
+- PowerPC/glibc target drops — no effect on x86_64-freestanding.
 
 ### V1.4 Known 0.17.0 regressions (track, do not ignore)
 
-- **soft-float x86** — hits the Zinux freestanding target (`soft_float`,
+- soft-float x86 — hits the Zinux freestanding target (soft_float,
   no SSE/MMX/AVX) directly. Own QEMU smoke test is the gate; a confirmed
   upstream fix or a documented, tested workaround is required before the
   toolchain can become Zinux's default.
@@ -76,18 +79,22 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
 - ZLS broken by the maker/configurer split — editor support stays on 0.16
   until fixed upstream.
 
+---
+
 ## V2 — Small Väinö extensions (opt-in only)
 
-1. A versioned `vaino` module/package with capability helpers (`Rights`
+1. A versioned `vaino` module/package with capability helpers (Rights
    literals, grant/deny constants) to reduce `@bitCast` repetition. Do not
-   place project-specific APIs in upstream `std` until the module boundary
+   place project-specific APIs in upstream std until the module boundary
    and compatibility policy are proven.
-2. MMIO `packed struct` + `volatile` read/write patterns for kernel code.
-3. `vaino-version` stamp + `build -Dvaino` flag for experiments.
+2. MMIO packed struct + volatile read/write patterns for kernel code.
+3. `vaino`-version stamp + build `-Dvaino` flag for experiments.
 4. Later: TDL / driver-plan schema in the `vaino` module — no syntax
    changes in this phase.
 5. Each extension ships with: langref example + host test + freestanding
    QEMU test.
+
+---
 
 ## V3 — Low-Level and Assembly Replacement
 
@@ -100,14 +107,14 @@ guarantees.
 
 ### V3.1 Language and compiler foundation
 
-- [ ] Document inline assembly constraints, clobbers, `volatile`, and
-      calling-convention guarantees for supported targets.
+- [ ] Document inline assembly constraints, clobbers, volatile, and
+  calling-convention guarantees for supported targets.
 - [ ] Add compile-time ABI checks for register arguments, stack alignment,
-      preserved registers, naked entry points, and interrupt boundaries.
+  preserved registers, naked entry points, and interrupt boundaries.
 - [ ] Provide low-level helpers for volatile memory access, memory barriers,
-      MMIO registers, bitfields, CPU features, and address spaces.
+  MMIO registers, bitfields, CPU features, and address spaces.
 - [ ] Keep target-specific operations explicit; do not hide privileged
-      instructions behind portable APIs that cannot state their assumptions.
+  instructions behind portable APIs that cannot state their assumptions.
 
 ### V3.2 Replacement order
 
@@ -138,15 +145,90 @@ wrappers. `context_switch.S`, `iretq`/`eret` transitions, and first-stage boot
 code are explicitly high-risk and remain assembly until Väinölang can express
 their register and stack guarantees precisely.
 
+### V3.5 — Native Väinölang machine model (long-term)
+
+The long-term direction is to give Väinölang its own architecture-independent
+low-level operation model, rather than merely translating Finnish spellings
+of existing x86 instructions. The compiler defines the semantics; each target
+backend lowers those operations to its own machine code.
+
+This is a staged research and implementation track, not a change to the current
+Zig 0.16 compatibility baseline. Existing Zig compatibility and the assembly
+replacement work in V3 continue until this track has a proven implementation
+and an explicit migration decision.
+
+#### V3.5.1 Language-owned semantics
+
+- [ ] Specify a minimal low-level operation set: constants and value movement,
+  integer arithmetic, bitwise operations, comparisons, branches, calls,
+  returns, memory reads/writes, and unreachable/trap behavior.
+- [ ] Specify integer widths, signedness, overflow behavior, shifts, alignment,
+  pointer/address representation, and invalid-memory behavior explicitly.
+- [ ] Define control-flow and calling semantics independently of any one CPU's
+  registers, flags, instruction names, or calling convention.
+- [ ] Define how volatile access, MMIO, memory ordering, atomics, CPU features,
+  privileged operations, and address spaces are represented. Keep operations
+  target-specific when portable semantics cannot express their guarantees.
+- [ ] Keep the semantic specification separate from surface syntax and from
+  each backend's machine instructions.
+
+#### V3.5.2 Compiler representation and first backend
+
+- [ ] Introduce a versioned, documented Väinölang low-level IR / operation set.
+- [ ] Add validation for well-formed control flow, operand types, memory
+  operations, and target-specific constraints.
+- [ ] Implement an x86-64 backend that lowers the IR to machine code without
+  requiring handwritten assembly for ordinary supported operations.
+- [ ] Preserve an explicit escape hatch for narrowly scoped target-specific
+  instructions and ABI boundaries; do not promise that every CPU operation
+  is portable.
+- [ ] Add a second-target feasibility spike before claiming that the operation
+  model is architecture-independent in practice.
+
+#### V3.5.3 Finnish surface vocabulary and source format
+
+- [ ] Evaluate Finnish command names as the human-facing syntax for the
+  low-level operation set (for example: *sano*, *ota*, *pane*, *lisää*,
+  *koettele*, *käy*, *palaa*, *seis*). Names are provisional; semantics
+  and tests take precedence over metaphor or historical style.
+- [ ] Evaluate `.dio` as a Väinölang source-file extension. Treat it as a
+  naming proposal until compiler, tooling, formatting, and build integration
+  support it.
+- [ ] Document the vocabulary and syntax in the language reference. Do not
+  make biblical or literary phrasing part of the language's semantics.
+- [ ] Keep generated machine code and disassembly available for debugging and
+  review, even when source programs no longer contain assembly.
+
+#### V3.5.4 Verification and migration gates
+
+- [ ] Build a conformance suite for every defined operation, including boundary
+  values, overflow, alignment, branch behavior, and memory semantics.
+- [ ] Compare execution against a reference interpreter or other trusted
+  semantic oracle where practical.
+- [ ] Test generated code in host tests and QEMU; inspect disassembly and ABI
+  behavior for low-level paths.
+- [ ] Keep existing assembly implementations as fallbacks until the new path
+  passes equivalent tests and review.
+- [ ] Only consider using the new operation model for Zinux kernel paths after
+  compiler correctness, ABI checks, boot tests, interrupt tests, syscall
+  tests, and user-mode transitions have passed.
+- [ ] Make any move away from the Zig-compatible language baseline a separate,
+  explicit roadmap decision. Do not silently conflate the native operation
+  model with the existing Zig fork or its opt-in extensions.
+
+---
+
 ## V4 — Maintenance
 
 - Stay on 0.16 base + cherry-pick ledger; full 0.17 rebase only when the
   Zinux `exp/vainolang` branch is green (host tests + smoke + full boot).
-- First consumer: Zinux `exp/vainolang` branch; `main` stays on Zig 0.16
+- First consumer: Zinux `exp/vainolang` branch; main stays on Zig 0.16
   until the exit gate passes (see Zinux `docs/ROADMAP.md`, Phase 0).
+
+---
 
 ## References
 
-- Upstream release notes: https://ziglang.org/download/0.17.0/release-notes.html
+- Upstream release notes: <https://ziglang.org/download/0.17.0/release-notes.html>
 - Consumer roadmap: `../Zinux/docs/ROADMAP.md` (Phase 0)
 - Sync ledger: `docs/VAINOLANG_SYNC.md` (to be created in V0)
