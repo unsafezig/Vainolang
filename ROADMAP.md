@@ -28,16 +28,26 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
   upstream SHA → decision (take / defer / reject) + reason.
 - [x] CI: nightly `git fetch zig-upstream`, list new 0.17 commits, no auto-merge
   (`.github/workflows/upstream-watch.yml` + `ci/upstream-watch.sh`).
+- [x] Local compiler-build capacity (2026-10-10): LLVM 21.1.3 + zlib + zstd
+  built from source with `zig cc` in `~/deps`; self-built stage3 validated
+  green (behavior slice/math + std math). Unblocks compiler-side takes.
+  Recipe + pitfalls in `docs/VAINOLANG_SYNC.md`.
 
 ---
 
 ## V1 — Zig 0.17 triage
 
+**Triage status 2026-10-11:** `@divCeil` is **taken** — full upstream
+series cherry-picked, adapted to the 0.16 base, validated on a self-built
+stage3, merged to `main` (PR #1). All other evaluated series are
+**deferred with reasons** in `docs/VAINOLANG_SYNC.md` (next candidate:
+slice deref/coercion). No breaking (V1.2) change has been taken.
+
 ### V1.1 Take as-is (the "rusinat")
 
 | Feature | Why it matters for Väinö/Zinux |
 |---------|--------------------------------|
-| `@divCeil` | Kernel alignment and size math without hand-rolled helpers; take as a complete upstream dependency series |
+| `@divCeil` | Kernel alignment and size math without hand-rolled helpers; take as a complete upstream dependency series. ✅ TAKEN 2026-10-11 (merged to `main`, PR #1; validated stage3, see sync ledger) |
 | `@backingInt` / `@fromBackingInt` | Explicit int↔enum conversion for capability `Rights`/audit codes; take as a complete upstream dependency series |
 | Deref/coercion of `comptime`-length slices to array pointers | ELF loader parsing (`kernel/loader`) |
 | Formally specified + fuzzed grammar | Helps validate AI-generated driver code syntactically |
@@ -87,12 +97,17 @@ in this roadmap and in the sync ledger. Väinö additions are opt-in
    literals, grant/deny constants) to reduce `@bitCast` repetition. Do not
    place project-specific APIs in upstream std until the module boundary
    and compatibility policy are proven.
+   ✅ Done 2026-10-09: `libs/vaino.zig` v1 in Zinux (`exp/vainolang`);
+   recorded as `V-1` in `LANGUAGE.md`.
 2. MMIO packed struct + volatile read/write patterns for kernel code.
+   ✅ Done 2026-10-09: `mmioRead`/`mmioWrite` in `vaino` v1.
 3. `vaino`-version stamp + build `-Dvaino` flag for experiments.
+   ✅ Done 2026-10-09: version stamp + `-Dvaino` + kernel comptime check.
 4. Later: TDL / driver-plan schema in the `vaino` module — no syntax
-   changes in this phase.
+   changes in this phase. *(not started)*
 5. Each extension ships with: langref example + host test + freestanding
-   QEMU test.
+   QEMU test. *(partial 2026-10-10: host test ✅, freestanding compile ✅,
+   QEMU boot test ⏳, langref example ⏳)*
 
 ---
 
@@ -224,6 +239,8 @@ and an explicit migration decision.
   Zinux `exp/vainolang` branch is green (host tests + smoke + full boot).
 - First consumer: Zinux `exp/vainolang` branch; main stays on Zig 0.16
   until the exit gate passes (see Zinux `docs/ROADMAP.md`, Phase 0).
+  Status 2026-10-11: branch carries `vaino` v1, copy-fix, `@bitCast`
+  audit, dual-config CI and `-Dqemu-args`; exit gate not yet passed.
 
 ---
 
@@ -231,4 +248,4 @@ and an explicit migration decision.
 
 - Upstream release notes: <https://ziglang.org/download/0.17.0/release-notes.html>
 - Consumer roadmap: `../Zinux/docs/ROADMAP.md` (Phase 0)
-- Sync ledger: `docs/VAINOLANG_SYNC.md` (to be created in V0)
+- Sync ledger: `docs/VAINOLANG_SYNC.md` (done in V0)
