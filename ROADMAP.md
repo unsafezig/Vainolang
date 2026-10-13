@@ -251,7 +251,7 @@ and an explicit migration decision.
 ## V5 — Memory safety: ownership, borrowing, scoped unsafe
 
 > Decided 2026-10-13 (design only — not implemented). Fills `LANGUAGE.md`
-> §4.2 (*Memory model*), which currently defines no final model.
+> §4.2 (*Memory model*), which now specifies the decided model (M0 spec, 2026-10-13).
 
 ### V5.0 Rationale and evidence
 
@@ -323,7 +323,7 @@ the language memory model instead of running two authorities.
 ### V5.2 Implementation phases
 
 - **M0 — Spec.** Write `LANGUAGE.md` §4.2: owner/borrow/`vaara`
-  semantics, allowed-operation list, audit rule. Decisions only, no code.
+  semantics, allowed-operation list, audit rule. Decisions only, no code. DONE 2026-10-13: LANGUAGE.md 4.2 specifies owner/borrow/vaara + capability link + non-goals.
 - **M1 — Lint + ledger first** (decided 2026-10-13; 0.16-compatible,
   Zinux side): `vaara` convention on the ~10 current kernel sites,
   `VAARA_LEDGER.md`, lint script listing unmarked dangerous ops → CI gate
@@ -341,7 +341,8 @@ the language memory model instead of running two authorities.
 
 ### V5.3 Acceptance evidence
 
-- [ ] `LANGUAGE.md` §4.2 specifies the model; `AGENTS.md` updated.
+- [x] `LANGUAGE.md` §4.2 specifies the model (M0, 2026-10-13).
+- [ ] `AGENTS.md` updated (due at M2: no enforcement yet, agent assumptions unchanged).
 - [ ] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason.
 - [ ] Lint gate green in CI; host tests count blocks.
 - [ ] Negative compile tests for each forbidden pattern.

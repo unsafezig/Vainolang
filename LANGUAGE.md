@@ -136,18 +136,85 @@ Rule of thumb:
 
 ### 4.2 Memory model
 
-Zig's memory model may be reconsidered.
+> **Status: decided (M0 spec, ROADMAP V5).** Not yet enforced by the
+> compiler. Enforcement arrives in phases: M1 brings lint + ledger on the
+> consumer side (0.16-compatible, no compiler change); M2 brings compiler
+> errors for violations. Until M2, this section is the normative design
+> that M1 conventions and M2 implementation must follow.
 
-Goals include:
+Zig's memory model is superseded by the following rules.
 
-- explicit allocation and ownership suitable for kernel memory management
-- support for physically contiguous memory
-- support for DMA-safe memory
-- page-granular control
-- no hidden runtime assumptions
-- no implicit allocations where they would be inappropriate
+#### Ownership
 
-No final Väinölang memory model is defined here yet.
+Every memory region (frame, DMA buffer, heap block, page table) has
+exactly one owner at any time. Ownership transfers only by an explicit
+move: the PMM-to-VMM-to-driver chain is a sequence of recorded transfers,
+not aliases. Two owners of one region is a compile error (M2) / lint
+error (M1).
+
+#### Borrowing
+
+A pragmatic subset, with no lifetime inference in v1:
+
+- `lainaa` borrows read-only (shareable).
+- `lainaa mut` borrows mutably (exclusive: no other borrow, read or
+  mutable, of the same region is live at the same time).
+- A borrow must not outlive the owner's lexical scope. Checking is
+  scope-based inside a function, not Rust-style lifetime inference.
+- A borrow that must span functions is not a borrow: use an explicit
+  ownership transfer instead.
+
+Keywords are Finnish, with no English alias in v1: aliases multiply the
+grammar for no safety gain.
+
+#### Scoped dangerous blocks
+
+Raw pointers, direct physical memory access, `volatile`, `asm`, and
+explicit check bypasses are allowed ONLY inside a `vaara` block:
+
+```zig
+vaara "syy: HHDM-ikkuna, omistaja: vmm" {
+    const tab: [*]PageTableEntry = @ptrFromInt(vmm.physToVirt(pml4));
+}
+```
+
+Rules:
+
+- Outside a `vaara` block, these operations are a compile error (M2) /
+  lint error (M1). Greppability is a requirement, not a style wish.
+- Every block carries a reason string and names the owning module.
+- All blocks are machine-listed into `VAARA_LEDGER.md` (one row per block:
+  location, reason, owner, review date).
+- The kernel needs on the order of ten such sites (`physToVirt`, PTE
+  read-modify-write, DMA rings, copy with privilege bracketing,
+  supervisor-table clone). They are not banned; they are made visible.
+  Visibility, not prohibition.
+- `vaara` never weakens capability checks: a block explains *how* memory
+  is touched, capabilities still decide *whether* it may be touched.
+
+#### Capability connection (M4 direction)
+
+A DMA/physical region's owner is its capability holder; granting a
+capability lends (`lainaa`) the region, and revocation ends the loan.
+This unifies the Zinux capability model with the language memory model
+instead of running two authorities. The exact grant-as-lend mechanics
+are specified at M4; M0-M3 must not contradict them.
+
+#### Non-goals for v1
+
+Lifetime inference, banning `unsafe` in the kernel, per-capability
+runtime revoke, and waiting for standard-library ownership types (the
+language carries the model; libraries follow).
+
+#### Rationale
+
+Consumer survey 2026-10-13 (Zinux tree): ~115 `@ptrFromInt`, ~75
+`@ptrCast`, ~300 unchecked slices/indexings, ~258 `volatile` uses, ~176
+memory-touching `asm volatile` sites, with ownership by convention only
+(PMM owns frames, VMM owns mappings, virtio-blk owns DMA rings, snapshot
+owns copies, heap owns regions). The only machine-checked boundary is
+capabilities; memory needs the same treatment: the kernel decides, and
+the language makes the decision visible.
 
 ### 4.3 Error handling
 
