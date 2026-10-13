@@ -240,7 +240,11 @@ and an explicit migration decision.
 - First consumer: Zinux `exp/vainolang` branch; main stays on Zig 0.16
   until the exit gate passes (see Zinux `docs/ROADMAP.md`, Phase 0).
   Status 2026-10-11: branch carries `vaino` v1, copy-fix, `@bitCast`
-  audit, dual-config CI and `-Dqemu-args`; exit gate not yet passed.
+  audit, dual-config CI and `-Dqemu-args`; QEMU/host exit-gate evidence GREEN
+  2026-10-13 (host 321/321 + smoke + full boot on both toolchains x both
+  configs, pinned prefix `~/deps/vainolang-pinned/`, see Zinux
+  `docs/PHASE0_EVIDENCE.md`); `.zigversion` flip deferred until the prefix
+  is CI-published and hardware smoke is re-run.
 
 ---
 

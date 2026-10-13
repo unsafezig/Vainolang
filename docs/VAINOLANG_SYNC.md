@@ -61,3 +61,21 @@ Validation: <tests and target matrix>
 
 Do not mark a change as taken because it applies cleanly. It is taken only
 after Väinölang tests pass and the Zinux consumer impact is recorded.
+
+## Pinned toolchain (2026-10-13, Phase 0 exit-gate evidence)
+
+- Pinned prefix: `~/deps/vainolang-pinned/` (`bin/zig.exe` + `lib/`),
+  version `0.16.0-dev.20+65f381644`, SHA256
+  `41D3762D9292F9642354D6B79003AC886A7DBF8BE9523B08D60C42B96E2255B2`.
+  Provenance file `PROVENANCE.md` at the prefix root.
+- Equivalence: `65f381644..main` (`95a46829a1`) is docs-only; `src`/`lib`/
+  `test`/`tools` identical, so the binary matches current `main`.
+- Consumer matrix (Zinux `exp/vainolang`, QEMU 8.2.2, q35):
+  host 321/321 on both toolchains x both configs (default, `-Dvaino=true`);
+  x86_64 kernel 66/66 steps + aarch64 build + `aarch64-verify: PASS` on both;
+  smoke (`Zinux boot OK` + `Smoke boot OK`) and full boot
+  (`All boot tests OK` + `Full boot OK`) on both toolchains x both configs,
+  zero `[ERR]`/`FAILED`/`panic`. Soft-float freestanding target shows no
+  0.17.0 regression in this pick. Full log: Zinux `docs/PHASE0_EVIDENCE.md`.
+- Gate decision: QEMU/host evidence GREEN; `.zigversion` flip deferred until
+  the prefix is CI-published (matrix axis) and hardware smoke is re-run.
