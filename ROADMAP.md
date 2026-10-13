@@ -244,6 +244,109 @@ and an explicit migration decision.
 
 ---
 
+## V5 — Memory safety: ownership, borrowing, scoped unsafe
+
+> Decided 2026-10-13 (design only — not implemented). Fills `LANGUAGE.md`
+> §4.2 (*Memory model*), which currently defines no final model.
+
+### V5.0 Rationale and evidence
+
+Zinux survey 2026-10-13 (consumer tree, `**/*.zig`):
+
+- ~115 `@ptrFromInt`, ~75 `@ptrCast`, ~300 unchecked slices/indexings,
+  ~258 `volatile` uses, ~176 memory-touching `asm volatile` sites.
+- Ownership is by convention only: PMM owns frames, VMM owns mappings,
+  virtio-blk owns DMA rings, snapshot owns copies, heap owns regions —
+  but nothing prevents two owners of one frame.
+- The only machine-checked boundary is capabilities (`Rights`, grant
+  gates). Memory needs the same treatment: the kernel decides, and the
+  language makes the decision visible.
+
+Goals (from `LANGUAGE.md` §4.2): explicit allocation and ownership for
+kernel memory management, physically contiguous and DMA-safe memory,
+page-granular control, no hidden runtime, no implicit allocation.
+
+### V5.1 Decided design
+
+**Keywords are Finnish** (decided 2026-10-13, cf. V3.5.3): the dangerous
+block is `vaara`, borrowing is `lainaa` / `lainaa mut`. Finnish first;
+no English alias in v1 (aliases multiply the grammar for no safety gain).
+
+**Ownership.** Every memory region (frame, DMA buffer, heap block, page
+table) has exactly one owner. Ownership transfers only by an explicit
+move (the PMM→VMM→driver chain becomes recorded transfers, not aliases).
+Double ownership is a compile error (M2) / lint error (M1).
+
+**Borrowing — pragmatic subset, no lifetime inference in v1** (decided
+2026-10-13). `lainaa` borrows read-only (shareable); `lainaa mut`
+borrows mutably (exclusive). A borrow must not outlive the owner's
+lexical scope; checking is scope-based inside a function, not
+Rust-style lifetime inference. Lifetimes spanning functions need an
+explicit transfer instead of a borrow.
+
+**Scoped dangerous block.** Raw pointers, direct physical memory,
+`volatile`, `asm`, and check bypasses are allowed ONLY inside an
+explicit block:
+
+```zig
+vaara "syy: HHDM-ikkuna, omistaja: vmm" {
+    const tab: [*]PageTableEntry = @ptrFromInt(vmm.physToVirt(pml4));
+}
+```
+
+Rules:
+
+- Outside a `vaara` block these operations are a compile error (M2) /
+  lint error (M1). Greppability is a requirement, not a style wish.
+- Every block carries a reason string + owning module.
+- All blocks are machine-listed into `VAARA_LEDGER.md` (`BITCAST_AUDIT`
+  pattern from the Zinux side).
+- The kernel needs ~10 such sites (`physToVirt`, PTE read-modify-write,
+  DMA rings, `stac`/`clac` copies, supervisor-table clone). They are not
+  banned — they are made visible. Visibility, not prohibition.
+- `vaara` never weakens capability checks: a block explains *how* memory
+  is touched, capabilities still decide *whether* it may be touched.
+
+**Non-goals for v1:** lifetime inference, banning `unsafe` in the kernel,
+per-capability runtime revoke, waiting for std ownership types (the
+language carries; libraries follow).
+
+**Capability connection (M4):** a DMA/physical region's owner is its
+capability holder; granting a capability is lending (`lainaa`) it.
+Revocation ends the loan. This unifies the Zinux capability model with
+the language memory model instead of running two authorities.
+
+### V5.2 Implementation phases
+
+- **M0 — Spec.** Write `LANGUAGE.md` §4.2: owner/borrow/`vaara`
+  semantics, allowed-operation list, audit rule. Decisions only, no code.
+- **M1 — Lint + ledger first** (decided 2026-10-13; 0.16-compatible,
+  Zinux side): `vaara` convention on the ~10 current kernel sites,
+  `VAARA_LEDGER.md`, lint script listing unmarked dangerous ops → CI gate
+  on `exp-vainolang`. Evidence: ledger + host test (block counter) +
+  QEMU green on both configs. No compiler change.
+- **M2 — Compiler enforcement** (Väinölang repo, V-1 opt-in pattern):
+  `vaara {}` syntax, Sema rejects raw ops outside blocks, move +
+  lexical borrow checking inside functions. Negative tests: double
+  ownership, escaping/mutably-shared borrow, out-of-block raw pointer →
+  all compile errors. Record as V-2 in `LANGUAGE.md` + update `AGENTS.md`.
+- **M3 — Kernel migration**, one module at a time, QEMU green at every
+  step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
+  Assembly fallbacks stay (V3 principle).
+- **M4 — DMA/physical ownership** tied to capabilities (grant = lend).
+
+### V5.3 Acceptance evidence
+
+- [ ] `LANGUAGE.md` §4.2 specifies the model; `AGENTS.md` updated.
+- [ ] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason.
+- [ ] Lint gate green in CI; host tests count blocks.
+- [ ] Negative compile tests for each forbidden pattern.
+- [ ] QEMU full boot green (x86_64 + ARM64) after each kernel migration step.
+- [ ] No `**`-style silent semantic drift: the model is 0.16-compatible
+  until an explicit migration decision (V4 rule).
+
+---
+
 ## References
 
 - Upstream release notes: <https://ziglang.org/download/0.17.0/release-notes.html>
