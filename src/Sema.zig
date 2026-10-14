@@ -374,6 +374,9 @@ pub const Block = struct {
 
     comptime_reason: ?BlockComptimeReason = null,
     is_typeof: bool = false,
+    /// Lexical `vaara "reason" {}` scope (Vainolang V-2). Raw operations
+    /// are gated on this bit when the module enables `vaara_strict`.
+    in_vaara: bool = false,
 
     /// Keep track of the active error return trace index around blocks so that we can correctly
     /// pop the error trace upon block exit.
@@ -521,6 +524,7 @@ pub const Block = struct {
             .inlining = parent.inlining,
             .comptime_reason = parent.comptime_reason,
             .is_typeof = parent.is_typeof,
+            .in_vaara = parent.in_vaara,
             .runtime_cond = parent.runtime_cond,
             .runtime_loop = parent.runtime_loop,
             .runtime_index = parent.runtime_index,
@@ -1743,6 +1747,13 @@ fn analyzeBodyInner(
             .block => if (block.isComptime()) {
                 continue :inst .block_inline;
             } else try sema.zirBlock(block, inst),
+
+            .vaara_block => if (block.isComptime()) {
+                // AstGen inlines comptime vaara bodies (like `block`), so
+                // the scope bit is lost there (M2a limitation, documented
+                // on `zirVaaraBlock`); analyze as a plain inline block.
+                continue :inst .block_inline;
+            } else try sema.zirVaaraBlock(block, inst),
 
             .block_comptime => {
                 const pl_node = datas[@intFromEnum(inst)].pl_node;
@@ -5242,6 +5253,7 @@ fn zirCImport(sema: *Sema, parent_block: *Block, inst: Zir.Inst.Index) CompileEr
             .r = .{ .simple = .operand_cImport },
         } },
         .c_import_buf = &c_import_buf,
+        .in_vaara = parent_block.in_vaara,
         .runtime_cond = parent_block.runtime_cond,
         .runtime_loop = parent_block.runtime_loop,
         .runtime_index = parent_block.runtime_index,
@@ -5387,6 +5399,66 @@ fn zirBlock(sema: *Sema, parent_block: *Block, inst: Zir.Inst.Index) CompileErro
         .inlining = parent_block.inlining,
         .comptime_reason = parent_block.comptime_reason,
         .is_typeof = parent_block.is_typeof,
+        .in_vaara = parent_block.in_vaara,
+        .want_safety = parent_block.want_safety,
+        .float_mode = parent_block.float_mode,
+        .c_import_buf = parent_block.c_import_buf,
+        .runtime_cond = parent_block.runtime_cond,
+        .runtime_loop = parent_block.runtime_loop,
+        .runtime_index = parent_block.runtime_index,
+        .error_return_trace_index = parent_block.error_return_trace_index,
+        .src_base_inst = parent_block.src_base_inst,
+        .type_name_ctx = parent_block.type_name_ctx,
+    };
+
+    defer child_block.instructions.deinit(gpa);
+    defer label.merges.deinit(gpa);
+
+    return sema.resolveBlockBody(parent_block, src, &child_block, body, inst, &label.merges);
+}
+
+/// Väinölang V-2: analyze a `vaara "reason" {}` body. Identical to
+/// `zirBlock` except the child scope carries `in_vaara`, which gates raw
+/// operations when the module enables `vaara_strict`.
+/// M2a limitation: a `vaara` block in comptime position is inlined by
+/// AstGen (like `block`), so the scope bit is lost there; the gate
+/// applies to runtime-analyzed bodies.
+fn zirVaaraBlock(sema: *Sema, parent_block: *Block, inst: Zir.Inst.Index) CompileError!Air.Inst.Ref {
+    const tracy = trace(@src());
+    defer tracy.end();
+
+    const pl_node = sema.code.instructions.items(.data)[@intFromEnum(inst)].pl_node;
+    const src = parent_block.nodeOffset(pl_node.src_node);
+    const extra = sema.code.extraData(Zir.Inst.Block, pl_node.payload_index);
+    const body = sema.code.bodySlice(extra.end, extra.data.body_len);
+    const gpa = sema.gpa;
+
+    const block_inst: Air.Inst.Index = @enumFromInt(sema.air_instructions.len);
+    try sema.air_instructions.append(gpa, .{
+        .tag = .block,
+        .data = undefined,
+    });
+
+    var label: Block.Label = .{
+        .zir_block = inst,
+        .merges = .{
+            .src_locs = .empty,
+            .results = .empty,
+            .br_list = .empty,
+            .block_inst = block_inst,
+        },
+    };
+
+    var child_block: Block = .{
+        .parent = parent_block,
+        .sema = sema,
+        .namespace = parent_block.namespace,
+        .instructions = .empty,
+        .label = &label,
+        .inlining = parent_block.inlining,
+        .comptime_reason = parent_block.comptime_reason,
+        .is_typeof = parent_block.is_typeof,
+        .in_vaara = true,
         .want_safety = parent_block.want_safety,
         .float_mode = parent_block.float_mode,
         .c_import_buf = parent_block.c_import_buf,
@@ -7394,6 +7466,7 @@ fn analyzeCall(
         .instructions = .empty,
         .inlining = &inlining,
         .is_typeof = block.is_typeof,
+        .in_vaara = block.in_vaara,
         .comptime_reason = if (block.isComptime()) .inlining_parent else null,
         .error_return_trace_index = block.error_return_trace_index,
         .runtime_cond = block.runtime_cond,
@@ -15637,6 +15710,12 @@ fn zirAsm(
         return .void_value;
     }
 
+    // Väinölang V-2: function-scope assembly is gated like raw pointers.
+    // Global assembly is exempt (boot entries stay assembly per V3).
+    if (block.ownerModule().vaara_strict and !block.in_vaara) {
+        return sema.fail(block, src, "assembly outside vaara block", .{});
+    }
+
     try sema.requireRuntimeBlock(block, src, null);
 
     var extra_i = extra.end;
@@ -17296,6 +17375,7 @@ fn zirTypeofBuiltin(sema: *Sema, block: *Block, inst: Zir.Inst.Index) CompileErr
         .comptime_reason = null,
         .is_typeof = true,
         .want_safety = false,
+        .in_vaara = block.in_vaara,
         .error_return_trace_index = block.error_return_trace_index,
         .src_base_inst = block.src_base_inst,
         .type_name_ctx = block.type_name_ctx,
@@ -17363,6 +17443,7 @@ fn zirTypeofPeer(
         .inlining = block.inlining,
         .comptime_reason = null,
         .is_typeof = true,
+        .in_vaara = block.in_vaara,
         .runtime_cond = block.runtime_cond,
         .runtime_loop = block.runtime_loop,
         .runtime_index = block.runtime_index,
@@ -21160,6 +21241,9 @@ fn zirPtrFromInt(sema: *Sema, block: *Block, inst: Zir.Inst.Index) CompileError!
 
     const uncoerced_operand_ty = sema.typeOf(operand_res);
     const dest_ty = try sema.resolveDestType(block, src, extra.lhs, .remove_eu, "@ptrFromInt");
+    if (block.ownerModule().vaara_strict and !block.in_vaara) {
+        return sema.fail(block, src, "@ptrFromInt outside vaara block", .{});
+    }
     try sema.checkVectorizableBinaryOperands(block, operand_src, dest_ty, uncoerced_operand_ty, src, operand_src);
 
     const is_vector = dest_ty.zigTypeTag(zcu) == .vector;
@@ -21482,6 +21566,9 @@ fn zirPtrCast(sema: *Sema, block: *Block, inst: Zir.Inst.Index) CompileError!Air
     const operand_src = block.builtinCallArgSrc(inst_data.src_node, 0);
     const extra = sema.code.extraData(Zir.Inst.Bin, inst_data.payload_index).data;
     const dest_ty = try sema.resolveDestType(block, src, extra.lhs, .remove_eu, "@ptrCast");
+    if (block.ownerModule().vaara_strict and !block.in_vaara) {
+        return sema.fail(block, src, "@ptrCast outside vaara block", .{});
+    }
     const operand = sema.resolveInst(extra.rhs);
 
     return sema.ptrCastFull(

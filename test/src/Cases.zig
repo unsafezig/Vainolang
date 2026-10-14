@@ -80,6 +80,8 @@ pub const Case = struct {
     expect_exact: bool = false,
     backend: Backend = .auto,
     link_libc: bool = false,
+    /// Väinölang V-2: gate raw ops on `vaara` blocks for this case.
+    vaara_strict: bool = false,
     pic: ?bool = null,
     pie: ?bool = null,
     /// A list of imports to cache alongside the source file.
@@ -360,6 +362,7 @@ fn addFromDirInner(
         const targets = try manifest.getConfigForKeyAlloc(ctx.arena, "target", std.Target.Query);
         const is_test = try manifest.getConfigForKeyAssertSingle("is_test", bool);
         const link_libc = try manifest.getConfigForKeyAssertSingle("link_libc", bool);
+        const vaara_strict = try manifest.getConfigForKeyAssertSingle("vaara_strict", bool);
         const output_mode = try manifest.getConfigForKeyAssertSingle("output_mode", std.builtin.OutputMode);
         const pic = try manifest.getConfigForKeyAssertSingle("pic", ?bool);
         const pie = try manifest.getConfigForKeyAssertSingle("pie", ?bool);
@@ -405,6 +408,7 @@ fn addFromDirInner(
                     .is_test = is_test,
                     .output_mode = output_mode,
                     .link_libc = link_libc,
+                    .vaara_strict = vaara_strict,
                     .pic = pic,
                     .pie = pie,
                     .deps = std.array_list.Managed(DepModule).init(ctx.cases.allocator),
@@ -541,6 +545,7 @@ pub fn lowerToBuildSteps(
         });
 
         if (case.link_libc) mod.link_libc = true;
+        if (case.vaara_strict) mod.vaara_strict = true;
         if (case.pic) |pic| mod.pic = pic;
         for (case.deps.items) |dep| {
             mod.addAnonymousImport(dep.name, .{
@@ -691,6 +696,8 @@ const TestManifestConfigDefaults = struct {
             return "false";
         } else if (std.mem.eql(u8, key, "link_libc")) {
             return "false";
+        } else if (std.mem.eql(u8, key, "vaara_strict")) {
+            return "false";
         } else if (std.mem.eql(u8, key, "c_frontend")) {
             return "clang";
         } else if (std.mem.eql(u8, key, "pic")) {
@@ -733,6 +740,7 @@ const TestManifest = struct {
         .{ "target", {} },
         .{ "c_frontend", {} },
         .{ "link_libc", {} },
+        .{ "vaara_strict", {} },
         .{ "backend", {} },
         .{ "pic", {} },
         .{ "pie", {} },

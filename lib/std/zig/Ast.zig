@@ -647,6 +647,7 @@ pub fn firstToken(tree: Ast, node: Node.Index) TokenIndex {
         .array_type,
         .array_type_sentinel,
         .error_value,
+        .vaara_block,
         => return tree.nodeMainToken(n) - end_offset,
 
         .array_init_dot,
@@ -954,7 +955,7 @@ pub fn lastToken(tree: Ast, node: Node.Index) TokenIndex {
         .switch_range,
         => n = tree.nodeData(n).node_and_node[1],
 
-        .test_decl, .@"errdefer" => n = tree.nodeData(n).opt_token_and_node[1],
+        .test_decl, .@"errdefer", .vaara_block => n = tree.nodeData(n).opt_token_and_node[1],
         .@"defer" => n = tree.nodeData(n).node,
         .anyframe_type => n = tree.nodeData(n).token_and_node[1],
 
@@ -3850,6 +3851,14 @@ pub const Node = struct {
         ///
         /// The `main_token` field is the `!` token.
         error_union,
+        /// `vaara "reason" { body }` (Väinölang V-2: scoped dangerous block).
+        ///
+        /// The `data` field is a `.opt_token_and_node`:
+        ///   1. a `OptionalTokenIndex` to the reason string literal.
+        ///   2. a `Node.Index` to the body block.
+        ///
+        /// The `main_token` field is the `vaara` identifier.
+        vaara_block,
 
         pub fn isContainerField(tag: Tag) bool {
             return switch (tag) {

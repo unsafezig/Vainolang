@@ -34,6 +34,11 @@ cc_argv: []const []const u8,
 /// (SPIR-V) whether to generate a structured control flow graph or not
 structured_cfg: bool,
 no_builtin: bool,
+/// Väinölang V-2: when true, raw operations (`@ptrFromInt`, `@ptrCast`,
+/// function-scope `asm`) are compile errors outside `vaara` blocks.
+/// Default off: existing code is unaffected (M1 lint covers the tree).
+/// M2a exposes this to the test harness; CLI/build-system exposure (M2b).
+vaara_strict: bool = false,
 
 pub const Deps = std.StringArrayHashMapUnmanaged(*Module);
 
@@ -81,6 +86,7 @@ pub const CreateOptions = struct {
         fuzz: ?bool = null,
         structured_cfg: ?bool = null,
         no_builtin: ?bool = null,
+        vaara_strict: ?bool = null,
     };
 };
 
@@ -125,6 +131,13 @@ pub fn create(arena: Allocator, options: CreateOptions) !*Package.Module {
         if (options.inherited.strip) |x| break :b x;
         if (options.parent) |p| break :b p.strip;
         break :b options.global.root_strip;
+    };
+
+    // Väinölang V-2: no global default; strictness is per-module opt-in.
+    const vaara_strict = b: {
+        if (options.inherited.vaara_strict) |x| break :b x;
+        if (options.parent) |p| break :b p.vaara_strict;
+        break :b false;
     };
 
     const zig_backend = target_util.zigBackend(target, options.global.use_llvm);
@@ -404,6 +417,7 @@ pub fn create(arena: Allocator, options: CreateOptions) !*Package.Module {
         .cc_argv = options.cc_argv,
         .structured_cfg = structured_cfg,
         .no_builtin = no_builtin,
+        .vaara_strict = vaara_strict,
     };
     return mod;
 }

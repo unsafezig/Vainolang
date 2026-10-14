@@ -1629,6 +1629,10 @@ fn buildOutputType(
                         mod_opts.no_builtin = false;
                     } else if (mem.eql(u8, arg, "-fno-builtin")) {
                         mod_opts.no_builtin = true;
+                    } else if (mem.eql(u8, arg, "-fvaara-strict")) {
+                        mod_opts.vaara_strict = true;
+                    } else if (mem.eql(u8, arg, "-fno-vaara-strict")) {
+                        mod_opts.vaara_strict = false;
                     } else if (mem.cutPrefix(u8, arg, "-fopt-bisect-limit=")) |next_arg| {
                         llvm_opt_bisect_limit = std.fmt.parseInt(c_int, next_arg, 0) catch |err|
                             fatal("unable to parse '{s}': {s}", .{ arg, @errorName(err) });

@@ -337,6 +337,10 @@ the language memory model instead of running two authorities.
   lexical borrow checking inside functions. Negative tests: double
   ownership, escaping/mutably-shared borrow, out-of-block raw pointer →
   all compile errors. Record as V-2 in `LANGUAGE.md` + update `AGENTS.md`.
+  IN PROGRESS 2026-10-14 (`exp/vaara`): M2a slice first — `vaara "reason" {}`
+  contextual syntax + `-fvaara-strict` Module flag + Sema gates
+  (`@ptrFromInt`/`@ptrCast`/function `asm`) + `vaara_strict` test-harness
+  key + negative tests; move/borrow checking follows in M2b.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
@@ -348,12 +352,93 @@ the language memory model instead of running two authorities.
 - [ ] `AGENTS.md` updated (due at M2: no enforcement yet, agent assumptions unchanged).
 - [x] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason (M1, 2026-10-13: V-01..V-10 + ok-scopes, Zinux `exp/vainolang`).
 - [x] Lint gate green in CI; host tests count blocks (M1, 2026-10-13: `tools/vaara_lint.sh` in `exp-vainolang.yml`, `vaara_ledger_test.zig` 2/2, host 324/324 both configs).
-- [ ] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason.
-- [ ] Lint gate green in CI; host tests count blocks.
 - [ ] Negative compile tests for each forbidden pattern.
 - [ ] QEMU full boot green (x86_64 + ARM64) after each kernel migration step.
 - [ ] No `**`-style silent semantic drift: the model is 0.16-compatible
   until an explicit migration decision (V4 rule).
+
+## Handoff — M2a paused 2026-10-14 (C: disk full, Fork moves to D:)
+
+> State checkpoint. Work branch `exp/vaara` (committed + pushed, see log).
+> Zinux side is clean and pushed (`exp/vainolang@faa8166`, V5 M1 complete).
+
+### Where stopped
+
+M2a implementation is **complete in code, not yet validated**: the
+`stage3-vaara` compiler build was killed mid-run when C: filled up
+(~36 GB free of ~1 TB). No stage3-vaara binary exists yet
+(`~/deps/stage3-vaara/` is a partial prefix — delete it).
+
+Changed on `exp/vaara` (all committed): contextual `vaara "reason" {}`
+syntax (`lib/std/zig/Parse.zig`, no new reserved keyword), `vaara_block`
+AST node (`lib/std/zig/Ast.zig`), lowering (`lib/std/zig/AstGen.zig`),
+ZIR tag + block-group joins (`lib/std/zig/Zir.zig`), `Sema.Block.in_vaara`
++ `zirVaaraBlock` + gates on `@ptrFromInt`/`@ptrCast`/function `asm`
+(`src/Sema.zig`), `vaara_strict` Module flag + `-fvaara-strict` CLI
+(`src/Package/Module.zig`, `src/main.zig`, `lib/std/Build/Module.zig`
+Maker chain), `vaara_strict` test-harness key (`test/src/Cases.zig`),
+`fmt` rendering (`lib/std/zig/Ast/Render.zig`), 4 test files
+(`test/cases/compile_errors/vaara_*_outside.zig`,
+`test/cases/vaara_block_ok.zig`).
+
+### Last problem (in order)
+
+1. `cmake --build build-debug` cannot bootstrap `main`: its `zig1.exe`
+   (stage1, pre-`@divCeil`) chokes on the `@divCeil` self-uses in `lib/`
+   (known ladder issue). Use the `zig build` ladder instead (below).
+2. The build runner's `lib/` wins: `test/src/Cases.zig` is compiled
+   against the *running* compiler's lib, so the first attempt failed with
+   `no field named 'vaara_strict' in struct 'Build.Module'`. Fix: invoke
+   the runner with `--zig-lib-dir <repo>/lib` (recipe below). This also
+   resolved itself for the Maker field.
+3. The build then enumerates missing exhaustive-switch arms one by one
+   (`switch must handle all possibilities`); fixed so far: `lvalExpr`,
+   `addEnsureResult`, `nodeMayEvalToError`, `AstRlAnnotate.expr` (all join
+   the `.block` arm). **Expect more of the same** (candidates:
+   `print_zir`, `ZonGen`, translate-c/Walk visitors, remaining Sema
+   switches) — fix iteratively, each rebuild is incremental and fast.
+4. Disk filled before the first full link; later errors (if any) are
+   unseen. The `test/cases` column numbers in the 3 negative tests are
+   predicted (`@`-token position) and must be verified against actual
+   output once stage3-vaara exists.
+
+### Resume recipe (after the move, paths are D: then)
+
+```text
+# 1. Delete stale state (absolute C: paths baked in, partial outputs):
+rm -rf ~/deps/stage3-vaara ~/deps/cache-vaara .zig-cache-vaara
+# 2. Runner = pinned stage3-B (self-contained, understands @divCeil):
+P=C:/Users/gigli/deps/vainolang-pinned/bin/zig.exe   # C: stays; adjust if deps moves too
+# 3. Build from the repo root on branch exp/vaara (isolated caches!):
+$p build --zig-lib-dir <repo>/lib -p ~/deps/stage3-vaara \
+  --search-prefix ~/deps/llvm21src --search-prefix ~/deps/zlib \
+  --search-prefix ~/deps/zstd \
+  --global-cache-dir ~/deps/cache-vaara/global --cache-dir .zig-cache-vaara
+# 4. Validate: stage3-vaara build test-cases -Dtest-filter=vaara
+#    (+ full test-cases with flag OFF as regression proof).
+```
+
+### Absolute paths that break in the move (C: → D:)
+
+- `tools/pinned_qemu_gate.sh`, Zinux `docs/PHASE0_EVIDENCE.md`,
+  prefix `PROVENANCE.md`: `/mnt/c/...` and `C:/Users/gigli/...` literals.
+- `build-debug/` + `build-divceil/` `CMakeCache.txt`: source/binary dirs
+  (reconfigure or drop; `build-debug` is the 0.16 baseline fallback).
+- WSL notes: `/mnt/c/Users/...` becomes `/mnt/d/...`.
+- `~/deps` (pinned toolchain, LLVM, zlib/zstd, provenances) stays valid
+  only if it stays on C:; if it moves too, update the recipe above.
+
+### Disk model going forward
+
+- One active compiler build dir per need (`build-debug` = 0.16 baseline
+  fallback; fresh `stage3-*` prefix per take, delete after validation).
+- Caches are disposable: per-compiler `--global-cache-dir`/`--cache-dir`
+  (never share — ZIR tag poisoning), delete with the prefix.
+- Keep: `vainolang-pinned/` + `PROVENANCE.md` (reproducible toolchain),
+  `llvm21src`/`zlib`/`zstd` (rebuild takes hours), one `stage3-*` winner
+  at a time. Drop: `build-divceil/` ladder intermediates,
+  `divceil-impl/build-impl/` once its binary is archived, `*.log` files
+  in `~/deps` after their evidence lands in the ledger.
 
 ---
 

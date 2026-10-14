@@ -526,6 +526,7 @@ fn lvalExpr(gz: *GenZir, scope: *Scope, node: Ast.Node.Index) InnerError!Zir.Ins
         .address_of,
         .optional_type,
         .block,
+        .vaara_block,
         .block_semicolon,
         .block_two,
         .block_two_semicolon,
@@ -1005,6 +1006,12 @@ fn expr(gz: *GenZir, scope: *Scope, ri: ResultInfo, node: Ast.Node.Index) InnerE
             var buf: [2]Ast.Node.Index = undefined;
             const statements = tree.blockStatements(&buf, node).?;
             return blockExpr(gz, scope, ri, node, statements, .normal);
+        },
+        .vaara_block => {
+            const body = tree.nodeData(node).opt_token_and_node[1];
+            var buf: [2]Ast.Node.Index = undefined;
+            const statements = tree.blockStatements(&buf, body).?;
+            return genVaaraBlock(gz, scope, ri, node, statements, .normal);
         },
         .enum_literal => if (try ri.rl.resultType(gz, node)) |res_ty| {
             const str_index = try astgen.identAsString(tree.nodeMainToken(node));
@@ -2453,6 +2460,44 @@ fn blockExpr(
     return rvalue(gz, ri, .void_value, block_node);
 }
 
+/// Väinölang V-2: `vaara "reason" { body }`. Identical codegen to an
+/// unlabeled block; the `.vaara_block` tag lets Sema mark the scope so
+/// raw operations can be gated on it (see `Sema.Block.in_vaara`).
+/// The reason string is documentation (ledger greppability); it has no
+/// runtime or comptime semantics.
+fn genVaaraBlock(
+    gz: *GenZir,
+    scope: *Scope,
+    ri: ResultInfo,
+    vaara_node: Ast.Node.Index,
+    statements: []const Ast.Node.Index,
+    kind: BlockKind,
+) InnerError!Zir.Inst.Ref {
+    const astgen = gz.astgen;
+
+    if (!gz.is_comptime) {
+        const block_inst = try gz.makeBlockInst(.vaara_block, vaara_node);
+        try gz.instructions.append(astgen.gpa, block_inst);
+
+        var block_scope = gz.makeSubBlock(scope);
+        defer block_scope.unstack();
+
+        try blockExprStmts(&block_scope, &block_scope.base, statements, kind);
+
+        if (!block_scope.endsWithNoReturn()) {
+            _ = try gz.addRestoreErrRetIndex(.{ .block = block_inst }, .always, vaara_node);
+            _ = try block_scope.addBreak(.@"break", block_inst, .void_value);
+        }
+
+        try block_scope.setBlockBody(block_inst);
+    } else {
+        var sub_gz = gz.makeSubBlock(scope);
+        try blockExprStmts(&sub_gz, &sub_gz.base, statements, kind);
+    }
+
+    return rvalue(gz, ri, .void_value, vaara_node);
+}
+
 fn checkLabelRedefinition(astgen: *AstGen, parent_scope: *Scope, label: Ast.TokenIndex) !void {
     // Look for the label in the scope.
     find_scope: switch (parent_scope.unwrap()) {
@@ -2725,6 +2770,7 @@ fn addEnsureResult(gz: *GenZir, maybe_unused_result: Zir.Inst.Ref, statement: As
             .bitcast,
             .bit_or,
             .block,
+            .vaara_block,
             .block_comptime,
             .block_inline,
             .declaration,
@@ -10543,6 +10589,10 @@ fn nodeMayEvalToError(tree: *const Ast, start_node: Ast.Node.Index) BuiltinFn.Ev
                     return .never;
                 }
             },
+
+            // Väinölang V-2: unlabeled by construction; only the implicit
+            // void break exists, so it never evaluates to an error.
+            .vaara_block => return .never,
 
             .builtin_call,
             .builtin_call_comma,

@@ -1096,6 +1096,10 @@ pub const Inst = struct {
         /// The ZIR instruction tag is one of the `Extended` ones.
         /// Uses the `extended` union field.
         extended,
+        /// Väinölang V-2: scoped dangerous block. Same shape and codegen
+        /// as `block`; lets Sema gate raw operations on the scope.
+        /// Uses the `pl_node` union field. Payload is `Block`.
+        vaara_block,
 
         /// Returns whether the instruction is one of the control flow "noreturn" types.
         /// Function calls do not count.
@@ -1134,6 +1138,7 @@ pub const Inst = struct {
                 .bitcast,
                 .bit_or,
                 .block,
+                .vaara_block,
                 .block_comptime,
                 .block_inline,
                 .declaration,
@@ -1433,6 +1438,7 @@ pub const Inst = struct {
                 .bitcast,
                 .bit_or,
                 .block,
+                .vaara_block,
                 .block_comptime,
                 .block_inline,
                 .declaration,
@@ -1671,6 +1677,7 @@ pub const Inst = struct {
                 .bit_not = .un_node,
                 .bit_or = .pl_node,
                 .block = .pl_node,
+                .vaara_block = .pl_node,
                 .block_comptime = .pl_node,
                 .block_inline = .pl_node,
                 .declaration = .declaration,
@@ -4538,6 +4545,7 @@ fn findTrackableInner(
         // Block instructions, recurse over the bodies.
 
         .block,
+        .vaara_block,
         .block_inline,
         .c_import,
         .typeof_builtin,
@@ -4694,7 +4702,7 @@ pub fn getParamBody(zir: Zir, fn_inst: Inst.Index) []const Zir.Inst.Index {
     };
 
     switch (tags[@intFromEnum(param_block_index)]) {
-        .block, .block_comptime, .block_inline => {
+        .block, .block_comptime, .block_inline, .vaara_block => {
             const param_block = zir.extraData(Inst.Block, datas[@intFromEnum(param_block_index)].pl_node.payload_index);
             return zir.bodySlice(param_block.end, param_block.data.body_len);
         },

@@ -567,6 +567,28 @@ fn findNextStmt(p: *Parse) void {
     }
 }
 
+/// VaaraBlock <- IDENTIFIER("vaara") STRINGLITERALSINGLE Block.
+/// Contextual: only the exact `vaara "reason" { ... }` shape is special;
+/// any other use of an identifier spelled `vaara` parses normally.
+fn parseVaaraBlock(p: *Parse) Error!Node.Index {
+    const vaara_token = p.nextToken();
+    const reason_token: OptionalTokenIndex = .fromToken(p.nextToken());
+    const body_node = try p.parseBlock() orelse return p.fail(.expected_block);
+    return p.addNode(.{
+        .tag = .vaara_block,
+        .main_token = vaara_token,
+        .data = .{ .opt_token_and_node = .{
+            reason_token,
+            body_node,
+        } },
+    });
+}
+
+fn isVaaraIdent(p: *Parse, tok: TokenIndex) bool {
+    const slice = p.source[p.tokenStart(tok)..p.tokenStart(tok + 1)];
+    return std.mem.eql(u8, std.mem.trimEnd(u8, slice, &std.ascii.whitespace), "vaara");
+}
+
 /// TestDecl <- KEYWORD_test (STRINGLITERALSINGLE / IDENTIFIER)? Block
 fn expectTestDecl(p: *Parse) Error!Node.Index {
     const test_token = p.assertToken(.keyword_test);
@@ -2046,6 +2068,12 @@ fn parsePrimaryExpr(p: *Parse) !?Node.Index {
             });
         },
         .identifier => {
+            if (p.tokenTag(p.tok_i + 1) == .string_literal and
+                p.tokenTag(p.tok_i + 2) == .l_brace and
+                isVaaraIdent(p, p.tok_i))
+            {
+                return try p.parseVaaraBlock();
+            }
             if (p.tokenTag(p.tok_i + 1) == .colon) {
                 switch (p.tokenTag(p.tok_i + 2)) {
                     .keyword_inline => {

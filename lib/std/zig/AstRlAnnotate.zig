@@ -165,7 +165,7 @@ fn expr(astrl: *AstRlAnnotate, node: Ast.Node.Index, block: ?*Block, ri: ResultI
             }
             return false;
         },
-        .test_decl => {
+        .test_decl, .vaara_block => {
             _ = try astrl.expr(tree.nodeData(node).opt_token_and_node[1], block, ResultInfo.none);
             return false;
         },

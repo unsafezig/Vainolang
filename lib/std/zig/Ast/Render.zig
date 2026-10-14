@@ -394,6 +394,16 @@ fn renderExpression(r: *Render, node: Ast.Node.Index, space: Space) Error!void {
             return renderBlock(r, node, statements, space);
         },
 
+        .vaara_block => {
+            const vaara_token = tree.nodeMainToken(node);
+            const reason_token, const body_node = tree.nodeData(node).opt_token_and_node;
+            try renderToken(r, vaara_token, .space);
+            try renderToken(r, reason_token.unwrap().?, .space);
+            var buf: [2]Ast.Node.Index = undefined;
+            const statements = tree.blockStatements(&buf, body_node).?;
+            return renderBlock(r, body_node, statements, space);
+        },
+
         .@"errdefer" => {
             const defer_token = tree.nodeMainToken(node);
             const maybe_payload_token, const expr = tree.nodeData(node).opt_token_and_node;
@@ -3208,6 +3218,7 @@ fn nodeIsBlock(tag: Ast.Node.Tag) bool {
         .block_semicolon,
         .block_two,
         .block_two_semicolon,
+        .vaara_block,
         => true,
         else => false,
     };
