@@ -328,7 +328,10 @@ the language memory model instead of running two authorities.
   Zinux side): `vaara` convention on the ~10 current kernel sites,
   `VAARA_LEDGER.md`, lint script listing unmarked dangerous ops → CI gate
   on `exp-vainolang`. Evidence: ledger + host test (block counter) +
-  QEMU green on both configs. No compiler change.
+  QEMU green on both configs. No compiler change. DONE 2026-10-14 (Zinux
+  `faa8166`): V-01..V-10 + `vaara-ok` scopes marked, `tools/vaara_lint.sh`
+  green + CI step, `vaara_ledger_test.zig` 2/2 (host 324/324 x2 configs),
+  smoke green x2 configs, zero `.bin` drift (comment-only).
 - **M2 — Compiler enforcement** (Väinölang repo, V-1 opt-in pattern):
   `vaara {}` syntax, Sema rejects raw ops outside blocks, move +
   lexical borrow checking inside functions. Negative tests: double
@@ -343,6 +346,8 @@ the language memory model instead of running two authorities.
 
 - [x] `LANGUAGE.md` §4.2 specifies the model (M0, 2026-10-13).
 - [ ] `AGENTS.md` updated (due at M2: no enforcement yet, agent assumptions unchanged).
+- [x] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason (M1, 2026-10-13: V-01..V-10 + ok-scopes, Zinux `exp/vainolang`).
+- [x] Lint gate green in CI; host tests count blocks (M1, 2026-10-13: `tools/vaara_lint.sh` in `exp-vainolang.yml`, `vaara_ledger_test.zig` 2/2, host 324/324 both configs).
 - [ ] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason.
 - [ ] Lint gate green in CI; host tests count blocks.
 - [ ] Negative compile tests for each forbidden pattern.

@@ -136,11 +136,15 @@ Rule of thumb:
 
 ### 4.2 Memory model
 
-> **Status: decided (M0 spec, ROADMAP V5).** Not yet enforced by the
-> compiler. Enforcement arrives in phases: M1 brings lint + ledger on the
-> consumer side (0.16-compatible, no compiler change); M2 brings compiler
-> errors for violations. Until M2, this section is the normative design
-> that M1 conventions and M2 implementation must follow.
+> **Status: decided (M0 spec, ROADMAP V5); M1 complete on the consumer
+> side (2026-10-13).** Not yet enforced by the compiler. Enforcement
+> arrives in phases: M1 brought lint + ledger on the consumer side
+> (0.16-compatible, no compiler change — Zinux `exp/vainolang`:
+> `docs/VAARA_LEDGER.md` valid with V-01..V-10 + justified `vaara-ok`
+> scopes, `tools/vaara_lint.sh` CI gate, `tests/host/vaara_ledger_test.zig`
+> block counter, smoke green on both configs with zero `.bin` drift);
+> M2 brings compiler errors for violations. Until M2, this section is
+> the normative design that M1 conventions and M2 implementation follow.
 
 Zig's memory model is superseded by the following rules.
 
