@@ -428,6 +428,7 @@ const Writer = struct {
 
             .block,
             .block_inline,
+            .vaara_block,
             .suspend_block,
             .loop,
             .c_import,

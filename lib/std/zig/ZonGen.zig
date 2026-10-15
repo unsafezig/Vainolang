@@ -275,6 +275,12 @@ fn expr(zg: *ZonGen, node: Ast.Node.Index, dest_node: Zoir.Node.Index) Allocator
             }
         },
 
+        // Väinölang V-2: `vaara "reason" {}` wraps a block body; ZON has no
+        // blocks, so reject with the same error. Separate arm (not joined
+        // to `.block`) because `blockStatements` returns null for the
+        // wrapper node (body lives in `opt_token_and_node[1]`).
+        .vaara_block => try zg.addErrorNode(node, "blocks are not allowed in ZON", .{}),
+
         .array_init_one,
         .array_init_one_comma,
         .array_init,
