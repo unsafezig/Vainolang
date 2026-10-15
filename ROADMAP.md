@@ -346,8 +346,15 @@ the language memory model instead of running two authorities.
   `0.16.0-dev.30+c9693cbf4`); full `test-cases` suite green, no
   regressions (5 flaky `AccessDenied` cache-lock fails, all green on
   retry). M2a commits: `cb2d2c92` (syntax+gates) + `c9693cbf` (ZonGen /
-  print_zir arms) + `a20dca9f` (all ptrCast forms, no-inherit,
+  print_zir arms) +   `a20dca9f` (all ptrCast forms, no-inherit,
   statement syntax, column fix). Move/borrow checking follows in M2b.
+  **Decided 2026-10-15 (plan A):** before M2b, a bounded consumer smoke
+  on Zinux `exp/vainolang` with this stage3 (flag off everywhere =
+  V4 regression proof, plus one strict-*compile* probe of a single
+  kernel module, no boot). Rationale: M2a touched the whole frontend
+  pipeline; M2b (Sema dataflow) must build on a consumer-validated
+  base so breakage sources stay isolated. No kernel migration (M3),
+  no `.zigversion` flip, no CI changes in this step.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
