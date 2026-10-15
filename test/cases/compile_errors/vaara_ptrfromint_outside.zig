@@ -6,4 +6,4 @@ export fn f() void {
 // error
 // vaara_strict=true
 //
-// :2:24: error: @ptrFromInt outside vaara block
+// :2:22: error: @ptrFromInt outside vaara block

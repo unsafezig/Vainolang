@@ -21549,6 +21549,9 @@ fn zirPtrCastFull(sema: *Sema, block: *Block, extended: Zir.Inst.Extended.InstDa
     const operand_src = block.src(.{ .node_offset_ptrcast_operand = extra.node });
     const operand = sema.resolveInst(extra.rhs);
     const dest_ty = try sema.resolveDestType(block, src, extra.lhs, .remove_eu, flags.needResultTypeBuiltinName());
+    if (block.ownerModule().vaara_strict and !block.in_vaara) {
+        return sema.fail(block, src, "@ptrCast outside vaara block", .{});
+    }
     return sema.ptrCastFull(
         block,
         flags,
@@ -22198,6 +22201,9 @@ fn zirPtrCastNoDest(sema: *Sema, block: *Block, extended: Zir.Inst.Extended.Inst
     const flags: Zir.Inst.FullPtrCastFlags = @bitCast(@as(FlagsInt, @truncate(extended.small)));
     const extra = sema.code.extraData(Zir.Inst.UnNode, extended.operand).data;
     const src = block.nodeOffset(extra.node);
+    if (block.ownerModule().vaara_strict and !block.in_vaara) {
+        return sema.fail(block, src, "@ptrCast outside vaara block", .{});
+    }
     const operand_src = block.src(.{ .node_offset_ptrcast_operand = extra.node });
     const operand = sema.resolveInst(extra.operand);
     const operand_ty = sema.typeOf(operand);

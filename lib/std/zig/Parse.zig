@@ -1245,6 +1245,17 @@ fn parseLabeledStatement(p: *Parse) !?Node.Index {
     const opt_label_token = p.parseBlockLabel();
 
     if (try p.parseBlock()) |block| return block;
+    // Väinölang V-2: `vaara "reason" {}` as a statement needs no
+    // semicolon, like a block. Unlabeled only in M2a (a label here falls
+    // through to the normal paths and errors).
+    if (opt_label_token == null and
+        p.tokenTag(p.tok_i) == .identifier and
+        p.tokenTag(p.tok_i + 1) == .string_literal and
+        p.tokenTag(p.tok_i + 2) == .l_brace and
+        isVaaraIdent(p, p.tok_i))
+    {
+        return try p.parseVaaraBlock();
+    }
     if (try p.parseLoopStatement()) |loop_stmt| return loop_stmt;
     if (try p.parseSwitchExpr(opt_label_token != null)) |switch_expr| return switch_expr;
 

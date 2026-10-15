@@ -133,10 +133,16 @@ pub fn create(arena: Allocator, options: CreateOptions) !*Package.Module {
         break :b options.global.root_strip;
     };
 
-    // Väinölang V-2: no global default; strictness is per-module opt-in.
+    // Väinölang V-2: strictness is per-module opt-in and is NEVER inherited
+    // from the parent module. Rationale: the gate must not leak into
+    // dependencies — upstream `std` (full of raw ops by design) would fail
+    // to compile under any strict root, which would make gradual,
+    // module-at-a-time kernel migration (V5 M3) impossible. A strict root
+    // with non-strict deps is the intended shape. Build-system users opt
+    // each module in explicitly (CreateOptions.vaara_strict); the CLI flag
+    // covers the main package root only.
     const vaara_strict = b: {
         if (options.inherited.vaara_strict) |x| break :b x;
-        if (options.parent) |p| break :b p.vaara_strict;
         break :b false;
     };
 
