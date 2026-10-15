@@ -337,10 +337,17 @@ the language memory model instead of running two authorities.
   lexical borrow checking inside functions. Negative tests: double
   ownership, escaping/mutably-shared borrow, out-of-block raw pointer →
   all compile errors. Record as V-2 in `LANGUAGE.md` + update `AGENTS.md`.
-  IN PROGRESS 2026-10-14 (`exp/vaara`): M2a slice first — `vaara "reason" {}`
-  contextual syntax + `-fvaara-strict` Module flag + Sema gates
-  (`@ptrFromInt`/`@ptrCast`/function `asm`) + `vaara_strict` test-harness
-  key + negative tests; move/borrow checking follows in M2b.
+  DONE M2a 2026-10-15 (`exp/vaara`): `vaara "reason" {}` contextual
+  syntax (statement + expression positions, no new keyword) + `vaara_block`
+  AST/ZIR + `-fvaara-strict` Module flag (per-module, never inherited —
+  `std`/deps stay non-strict) + Sema gates (`@ptrFromInt` / `@ptrCast`
+  all 3 Zir forms / function `asm`) + `vaara_strict` test-harness key +
+  4 test files (1 positive + 3 negative, all green on LLVM stage3
+  `0.16.0-dev.30+c9693cbf4`); full `test-cases` suite green, no
+  regressions (5 flaky `AccessDenied` cache-lock fails, all green on
+  retry). M2a commits: `cb2d2c92` (syntax+gates) + `c9693cbf` (ZonGen /
+  print_zir arms) + `a20dca9f` (all ptrCast forms, no-inherit,
+  statement syntax, column fix). Move/borrow checking follows in M2b.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
@@ -349,84 +356,81 @@ the language memory model instead of running two authorities.
 ### V5.3 Acceptance evidence
 
 - [x] `LANGUAGE.md` §4.2 specifies the model (M0, 2026-10-13).
-- [ ] `AGENTS.md` updated (due at M2: no enforcement yet, agent assumptions unchanged).
+- [ ] `AGENTS.md` updated (checked 2026-10-15: no `AGENTS.md` exists in
+  this repo; enforcement semantics recorded in `LANGUAGE.md` §4.2 + §7 V-2).
 - [x] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason (M1, 2026-10-13: V-01..V-10 + ok-scopes, Zinux `exp/vainolang`).
 - [x] Lint gate green in CI; host tests count blocks (M1, 2026-10-13: `tools/vaara_lint.sh` in `exp-vainolang.yml`, `vaara_ledger_test.zig` 2/2, host 324/324 both configs).
-- [ ] Negative compile tests for each forbidden pattern.
+- [x] Negative compile tests for each forbidden pattern (M2a, 2026-10-15:
+  `@ptrFromInt` / `@ptrCast` / function `asm` outside `vaara` → compile
+  errors; `vaara_block_ok` positive case green).
 - [ ] QEMU full boot green (x86_64 + ARM64) after each kernel migration step.
 - [ ] No `**`-style silent semantic drift: the model is 0.16-compatible
   until an explicit migration decision (V4 rule).
 
-## Handoff — M2a paused 2026-10-14 (C: disk full, Fork moves to D:)
+## M2a — complete 2026-10-15 (`exp/vaara`: `cb2d2c92` + `c9693cbf` + `a20dca9f`)
 
-> State checkpoint. Work branch `exp/vaara` (committed + pushed, see log).
-> Zinux side is clean and pushed (`exp/vainolang@faa8166`, V5 M1 complete).
+> Validated on LLVM stage3 `0.16.0-dev.30+c9693cbf4`
+> (`~/deps/stage3-vaara/`, pinned prefix untouched). Work branch `exp/vaara`
+> (committed, not yet merged). Zinux side clean (`exp/vainolang@faa8166`,
+> V5 M1 complete).
 
-### Where stopped
+### Validation evidence
 
-M2a implementation is **complete in code, not yet validated**: the
-`stage3-vaara` compiler build was killed mid-run when C: filled up
-(~36 GB free of ~1 TB). No stage3-vaara binary exists yet
-(`~/deps/stage3-vaara/` is a partial prefix — delete it).
+- `stage3-vaara build test-cases -Dtest-filter=vaara`: all 4 vaara tests
+  green (1 positive `vaara_block_ok` incl. `@ptrFromInt` in-block on LLVM
+  backend; 3 negative `@ptrFromInt`/`@ptrCast`/`asm` outside-block errors).
+- Full `build test-cases` (flag off globally; vaara tests opt in per
+  case): 3019/3434 steps green, 405 skipped (cross-target/environment),
+  5 failed → all 5 are flaky `AccessDenied` local-cache renames on
+  `-fno-llvm` cross tests, each green on retry. No M2a regressions.
+- Fixes found during validation (all in `a20dca9f`): `@ptrCast` needed
+  gates in all 3 Zir forms (`ptr_cast` + `ptr_cast_full` +
+  `ptr_cast_no_dest` — `@ptrCast(@alignCast(p))` lowers to an extended
+  form); `vaara_strict` must never inherit parent→child (or `std` fails
+  under any strict root — gradual M3 migration requires strict roots
+  with non-strict deps); `vaara` block accepted as a statement via
+  `parseLabeledStatement` (bare blocks take that path, not the
+  expression-statement path — the `;` error); predicted `@`-token
+  columns corrected against actuals (`:2:22`).
 
-Changed on `exp/vaara` (all committed): contextual `vaara "reason" {}`
-syntax (`lib/std/zig/Parse.zig`, no new reserved keyword), `vaara_block`
-AST node (`lib/std/zig/Ast.zig`), lowering (`lib/std/zig/AstGen.zig`),
-ZIR tag + block-group joins (`lib/std/zig/Zir.zig`), `Sema.Block.in_vaara`
-+ `zirVaaraBlock` + gates on `@ptrFromInt`/`@ptrCast`/function `asm`
-(`src/Sema.zig`), `vaara_strict` Module flag + `-fvaara-strict` CLI
-(`src/Package/Module.zig`, `src/main.zig`, `lib/std/Build/Module.zig`
-Maker chain), `vaara_strict` test-harness key (`test/src/Cases.zig`),
-`fmt` rendering (`lib/std/zig/Ast/Render.zig`), 4 test files
-(`test/cases/compile_errors/vaara_*_outside.zig`,
-`test/cases/vaara_block_ok.zig`).
-
-### Last problem (in order)
-
-1. `cmake --build build-debug` cannot bootstrap `main`: its `zig1.exe`
-   (stage1, pre-`@divCeil`) chokes on the `@divCeil` self-uses in `lib/`
-   (known ladder issue). Use the `zig build` ladder instead (below).
-2. The build runner's `lib/` wins: `test/src/Cases.zig` is compiled
-   against the *running* compiler's lib, so the first attempt failed with
-   `no field named 'vaara_strict' in struct 'Build.Module'`. Fix: invoke
-   the runner with `--zig-lib-dir <repo>/lib` (recipe below). This also
-   resolved itself for the Maker field.
-3. The build then enumerates missing exhaustive-switch arms one by one
-   (`switch must handle all possibilities`); fixed so far: `lvalExpr`,
-   `addEnsureResult`, `nodeMayEvalToError`, `AstRlAnnotate.expr` (all join
-   the `.block` arm). **Expect more of the same** (candidates:
-   `print_zir`, `ZonGen`, translate-c/Walk visitors, remaining Sema
-   switches) — fix iteratively, each rebuild is incremental and fast.
-4. Disk filled before the first full link; later errors (if any) are
-   unseen. The `test/cases` column numbers in the 3 negative tests are
-   predicted (`@`-token position) and must be verified against actual
-   output once stage3-vaara exists.
-
-### Resume recipe (after the move, paths are D: then)
+### Corrected stage3 recipe (D: paths; `-Dstatic-llvm=true` REQUIRED)
 
 ```text
-# 1. Delete stale state (absolute C: paths baked in, partial outputs):
-rm -rf ~/deps/stage3-vaara ~/deps/cache-vaara .zig-cache-vaara
-# 2. Runner = pinned stage3-B (self-contained, understands @divCeil):
-P=C:/Users/gigli/deps/vainolang-pinned/bin/zig.exe   # C: stays; adjust if deps moves too
-# 3. Build from the repo root on branch exp/vaara (isolated caches!):
+# Without -Dstatic-llvm the prefix builds WITHOUT LLVM (58 MB, have_llvm=false)
+# and everything silently falls back to the x86_64 backend (u128/f128 gaps).
+# With the flag the prefix matches pinned's profile (~225 MB, static LLVM).
 $p build --zig-lib-dir <repo>/lib -p ~/deps/stage3-vaara \
+  -Dstatic-llvm=true \
   --search-prefix ~/deps/llvm21src --search-prefix ~/deps/zlib \
   --search-prefix ~/deps/zstd \
   --global-cache-dir ~/deps/cache-vaara/global --cache-dir .zig-cache-vaara
-# 4. Validate: stage3-vaara build test-cases -Dtest-filter=vaara
+# Validate: stage3-vaara build test-cases -Dtest-filter=vaara
 #    (+ full test-cases with flag OFF as regression proof).
 ```
 
-### Absolute paths that break in the move (C: → D:)
+### Pitfalls recorded (do not re-learn)
 
-- `tools/pinned_qemu_gate.sh`, Zinux `docs/PHASE0_EVIDENCE.md`,
-  prefix `PROVENANCE.md`: `/mnt/c/...` and `C:/Users/gigli/...` literals.
-- `build-debug/` + `build-divceil/` `CMakeCache.txt`: source/binary dirs
-  (reconfigure or drop; `build-debug` is the 0.16 baseline fallback).
-- WSL notes: `/mnt/c/Users/...` becomes `/mnt/d/...`.
-- `~/deps` (pinned toolchain, LLVM, zlib/zstd, provenances) stays valid
-  only if it stays on C:; if it moves too, update the recipe above.
+- A no-LLVM stage3 is treacherous, not merely slower: `zig run`/`build`
+  silently use the x86_64 backend, whose `u128` high-bit ops (`printInt`
+  of values with bit ≥64 set) and `f128` formatting misbehave
+  (`integer overflow` panic / garbage). This exactly mimicked a
+  compiler miscompile (deterministic, backend-independent-looking) and
+  cost a full bisection (build.zig → `b.dependency` → standalone →
+  `dependency_options` → `{x}` of `comptime_float`) before the 58 MB
+  binary size gave it away. **Always sanity-check prefix size
+  (~225 MB) and `-fllvm` after building a stage3.**
+- Stale test caches poison across working-tree compiler changes: the
+  version string comes from `git describe`, so uncommitted Sema/Parse
+  changes do NOT change cache digests. After any compiler-side change,
+  nuke `.zig-cache-vaara` + `cache-vaara` before trusting test results
+  (a pre-fix parse error survived as a cache hit and masked the fix).
+- `git` on this repo is slow (worktree scan); prefer
+  `git --no-optional-locks <cmd> | Select-Object -First N` over pager
+  pipes, and `Select-String` over `grep` in PowerShell 5.1.
+- Absolute paths that broke in the C: → D: move: `tools/pinned_qemu_gate.sh`,
+  Zinux `docs/PHASE0_EVIDENCE.md`, prefix `PROVENANCE.md` (`/mnt/c/...`,
+  `C:/Users/gigli/...` literals); `build-debug/` + `build-divceil/`
+  `CMakeCache.txt` (reconfigure or drop); WSL `/mnt/c/` → `/mnt/d/`.
 
 ### Disk model going forward
 

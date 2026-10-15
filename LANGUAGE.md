@@ -137,14 +137,19 @@ Rule of thumb:
 ### 4.2 Memory model
 
 > **Status: decided (M0 spec, ROADMAP V5); M1 complete on the consumer
-> side (2026-10-13).** Not yet enforced by the compiler. Enforcement
-> arrives in phases: M1 brought lint + ledger on the consumer side
+> side (2026-10-13); M2a complete in the compiler (2026-10-15, V-2).**
+> M1 brought lint + ledger on the consumer side
 > (0.16-compatible, no compiler change — Zinux `exp/vainolang`:
 > `docs/VAARA_LEDGER.md` valid with V-01..V-10 + justified `vaara-ok`
 > scopes, `tools/vaara_lint.sh` CI gate, `tests/host/vaara_ledger_test.zig`
 > block counter, smoke green on both configs with zero `.bin` drift);
-> M2 brings compiler errors for violations. Until M2, this section is
-> the normative design that M1 conventions and M2 implementation follow.
+> M2a brings compiler errors for the `vaara`-block subset below:
+> contextual `vaara "reason" {}` syntax (no new keyword), Sema rejection
+> of `@ptrFromInt` / `@ptrCast` (all three Zir forms) / function-scope
+> `asm` outside a block when the module opts in (`-fvaara-strict`,
+> per-module, never inherited by dependencies — `std` stays non-strict).
+> Move/borrow checking is M2b. Until M2b, this section is
+> the normative design that M1 conventions and M2a enforcement follow.
 
 Zig's memory model is superseded by the following rules.
 
@@ -341,6 +346,7 @@ Every entry should explain:
 | # | Area | Status | Väinölang behavior | Reason | Tests |
 |---|------|--------|--------------------|--------|-------|
 | V-1 | Opt-in `vaino` module | **current** (v1) | Versioned `vaino` module (`libs/vaino.zig` in Zinux): capability `Rights` mask constants + `toMask`/`fromMask`/`narrow` helpers, MMIO `packed struct` + `volatile` read/write patterns, `vaino-version` stamp + `build -Dvaino` flag. Only active via explicit `@import("vaino")`; default build has no language change. | Centralize `@bitCast` conversions in one audited place ahead of the 0.17 `@bitCast` semantic change; reduce repetition without implicit semantics. | Zinux `tests/host/vaino_test.zig` (host) + kernel freestanding compile via `@import("vaino")` in `kernel/main.zig`; QEMU boot unchanged (default `-Dvaino=false`). |
+| V-2 | Scoped `vaara` block (M2a) | **current** (`exp/vaara`) | Contextual `vaara "reason" {}` (identifier + string + block; no new reserved keyword): `vaara_block` AST node → ZIR `vaara_block` → Sema `in_vaara` scope. With `-fvaara-strict` (per-module opt-in, never inherited by dependencies), `@ptrFromInt`, `@ptrCast` (all forms incl. extended), and function-scope `asm` outside a block are compile errors. `vaara` also valid as a statement (no semicolon, like blocks); ZON rejects it; `zig fmt` renders it. | Make the ~10 kernel dangerous sites visible and machine-checked (M1 lint becomes M2 errors); `std`/deps stay non-strict so gradual module-at-a-time migration (M3) is possible. | `test/cases/vaara_block_ok.zig` + 3 `compile_errors/vaara_*_outside.zig` negative tests (all green on LLVM stage3); full `test-cases` suite green (no regressions). |
 
 ### Adopted from Zig 0.17+
 
