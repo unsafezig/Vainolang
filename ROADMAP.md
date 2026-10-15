@@ -353,8 +353,11 @@ the language memory model instead of running two authorities.
   V4 regression proof, plus one strict-*compile* probe of a single
   kernel module, no boot). Rationale: M2a touched the whole frontend
   pipeline; M2b (Sema dataflow) must build on a consumer-validated
-  base so breakage sources stay isolated. No kernel migration (M3),
+  base so breakage sources stay   isolated. No kernel migration (M3),
   no `.zigversion` flip, no CI changes in this step.
+  **DONE 2026-10-15:** green (Zinux `docs/PHASE0_EVIDENCE.md` §2026-10-15:
+  host EXIT 0 ×2, kernel builds + aarch64-verify PASS, QEMU 4/4, strict
+  probe exact at `libs/vaino.zig:118,124`). M2b cleared to proceed.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
