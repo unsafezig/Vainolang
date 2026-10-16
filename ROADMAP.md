@@ -371,9 +371,16 @@ the language memory model instead of running two authorities.
    are errors; plain `=` reinitializes; `return luovuta x` transfers.
    Identity lowering, no ZIR tags. 1 positive + 5 negative tests green;
    lainaa + vaara + full `test-cases` green, no regressions.
-   M2 COMPLETE: vaara gates (M2a) + borrow checking (M2b-i) + move
-   checking (M2b-ii). Next: M3 kernel migration or plan-B consumer
-   smoke of the borrow/move toolchain.
+    M2 COMPLETE: vaara gates (M2a) + borrow checking (M2b-i) + move
+    checking (M2b-ii).
+    **MERGED to `main` 2026-10-16:** docs-first close-out —
+    `LANGUAGE.md` §4.2 + §7 V-2 updated to M2-complete, `AGENTS.md`
+    created (V-2 semantics + M2 pitfalls: Zir-tag-full, rebuild
+    economics, cache hygiene, vacuous-pass probe), all 18 M2 tests
+    re-verified green on LLVM stage3 `0.16.0-dev.36` (`stage3-luovuta/`:
+    3 positives compile, 15 negatives error as specified).
+    Next: plan-B consumer smoke of the borrow/move toolchain, then
+    M3 kernel migration.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
@@ -382,8 +389,9 @@ the language memory model instead of running two authorities.
 ### V5.3 Acceptance evidence
 
 - [x] `LANGUAGE.md` §4.2 specifies the model (M0, 2026-10-13).
-- [ ] `AGENTS.md` updated (checked 2026-10-15: no `AGENTS.md` exists in
-  this repo; enforcement semantics recorded in `LANGUAGE.md` §4.2 + §7 V-2).
+- [x] `AGENTS.md` created 2026-10-16 (V-2 enforcement semantics +
+  M2 working rules: Zir-tag-full, rebuild economics, cache hygiene,
+  vacuous-pass probe; source-of-truth order matches `LANGUAGE.md`).
 - [x] `VAARA_LEDGER.md` lists every kernel `vaara` block with reason (M1, 2026-10-13: V-01..V-10 + ok-scopes, Zinux `exp/vainolang`).
 - [x] Lint gate green in CI; host tests count blocks (M1, 2026-10-13: `tools/vaara_lint.sh` in `exp-vainolang.yml`, `vaara_ledger_test.zig` 2/2, host 324/324 both configs).
 - [x] Negative compile tests for each forbidden pattern (M2a, 2026-10-15:

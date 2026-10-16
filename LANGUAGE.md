@@ -137,7 +137,7 @@ Rule of thumb:
 ### 4.2 Memory model
 
 > **Status: decided (M0 spec, ROADMAP V5); M1 complete on the consumer
-> side (2026-10-13); M2a complete in the compiler (2026-10-15, V-2).**
+> side (2026-10-13); M2 complete in the compiler (2026-10-16, V-2).**
 > M1 brought lint + ledger on the consumer side
 > (0.16-compatible, no compiler change — Zinux `exp/vainolang`:
 > `docs/VAARA_LEDGER.md` valid with V-01..V-10 + justified `vaara-ok`
@@ -147,9 +147,11 @@ Rule of thumb:
 > contextual `vaara "reason" {}` syntax (no new keyword), Sema rejection
 > of `@ptrFromInt` / `@ptrCast` (all three Zir forms) / function-scope
 > `asm` outside a block when the module opts in (`-fvaara-strict`,
-> per-module, never inherited by dependencies — `std` stays non-strict).
-> Move/borrow checking is M2b. Until M2b, this section is
-> the normative design that M1 conventions and M2a enforcement follow.
+> per-module, never inherited by dependencies — `std` stays non-strict);
+> M2b-i brings borrow checking (`lainaa` / `lainaa mut`), M2b-ii the
+> explicit move (`luovuta`). This section is now enforced language, not
+> just design: M2 is merged to `main` and validated on the LLVM stage3
+> (`0.16.0-dev.36`, all M2 tests + full `test-cases` green).
 
 Zig's memory model is superseded by the following rules.
 
@@ -368,7 +370,7 @@ Every entry should explain:
 | # | Area | Status | Väinölang behavior | Reason | Tests |
 |---|------|--------|--------------------|--------|-------|
 | V-1 | Opt-in `vaino` module | **current** (v1) | Versioned `vaino` module (`libs/vaino.zig` in Zinux): capability `Rights` mask constants + `toMask`/`fromMask`/`narrow` helpers, MMIO `packed struct` + `volatile` read/write patterns, `vaino-version` stamp + `build -Dvaino` flag. Only active via explicit `@import("vaino")`; default build has no language change. | Centralize `@bitCast` conversions in one audited place ahead of the 0.17 `@bitCast` semantic change; reduce repetition without implicit semantics. | Zinux `tests/host/vaino_test.zig` (host) + kernel freestanding compile via `@import("vaino")` in `kernel/main.zig`; QEMU boot unchanged (default `-Dvaino=false`). |
-| V-2 | Scoped `vaara` block (M2a) | **current** (`exp/vaara`) | Contextual `vaara "reason" {}` (identifier + string + block; no new reserved keyword): `vaara_block` AST node → ZIR `vaara_block` → Sema `in_vaara` scope. With `-fvaara-strict` (per-module opt-in, never inherited by dependencies), `@ptrFromInt`, `@ptrCast` (all forms incl. extended), and function-scope `asm` outside a block are compile errors. `vaara` also valid as a statement (no semicolon, like blocks); ZON rejects it; `zig fmt` renders it. | Make the ~10 kernel dangerous sites visible and machine-checked (M1 lint becomes M2 errors); `std`/deps stay non-strict so gradual module-at-a-time migration (M3) is possible. | `test/cases/vaara_block_ok.zig` + 3 `compile_errors/vaara_*_outside.zig` negative tests (all green on LLVM stage3); full `test-cases` suite green (no regressions). |
+| V-2 | Ownership / borrow / `vaara` (M2: M2a + M2b-i + M2b-ii) | **current** (main) | Contextual `vaara "reason" {}` (M2a; identifier + string + block, no new reserved keyword): `vaara_block` AST node → ZIR `vaara_block` → Sema `in_vaara` scope. With `-fvaara-strict` (per-module opt-in, never inherited by dependencies), `@ptrFromInt`, `@ptrCast` (all forms incl. extended), and function-scope `asm` outside a block are compile errors. Contextual `lainaa x` / `lainaa mut x` (M2b-i, always on — triggered by the syntax itself, no flag): lexical borrow checking in AstGen (exclusivity, no escape via `return`/globals, no reassign-while-borrowed, `mut`-of-`const` / non-local / `comptime` guards); lowers exactly like `&x`. Contextual `luovuta x` (M2b-ii, always on): explicit move marking the binding moved-from; later uses, double moves, and moves-while-borrowed are errors; plain `=` reinitializes; `return luovuta x` transfers; identity lowering. No new ZIR tags anywhere (`Zir.Inst.Tag` is a full `enum(u8)`). All three constructs are valid as statements; ZON rejects all three; `zig fmt` renders all three. | Make the ~10 kernel dangerous sites visible and machine-checked (M1 lint becomes M2 errors); ownership transfers (PMM→VMM→driver) become recorded moves and borrows become lexically checked; `std`/deps stay non-strict under `vaara` so gradual module-at-a-time migration (M3) is possible. Finnish keywords, no English aliases in v1. | `vaara_block_ok` + 3 vaara negatives; `lainaa_ok` + 8 lainaa negatives; `luovuta_ok` + 4 luovuta negatives (all green on LLVM stage3 `0.16.0-dev.36`); full `test-cases` suite green (no regressions). |
 
 ### Adopted from Zig 0.17+
 
