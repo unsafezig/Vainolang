@@ -589,6 +589,36 @@ fn isVaaraIdent(p: *Parse, tok: TokenIndex) bool {
     return std.mem.eql(u8, std.mem.trimEnd(u8, slice, &std.ascii.whitespace), "vaara");
 }
 
+/// LainaaOperand <- IDENTIFIER("lainaa") (IDENTIFIER("mut")? PrefixExpr.
+/// Contextual (Väinölang V-2 M2b-i): only the exact `lainaa x` /
+/// `lainaa mut x` shapes are special; any other use of identifiers
+/// spelled `lainaa`/`mut` parses normally. Triggers only when the token
+/// after `lainaa` is an identifier: `lainaa(x)` stays a call, `lainaa;`
+/// stays a variable, `lainaa + b` stays an addition.
+fn parseLainaa(p: *Parse, is_mut: bool) Error!Node.Index {
+    const lainaa_token = p.nextToken();
+    const mut_token: OptionalTokenIndex = if (is_mut) .fromToken(p.nextToken()) else .none;
+    const operand = try p.expectPrefixExpr();
+    return p.addNode(.{
+        .tag = .lainaa,
+        .main_token = lainaa_token,
+        .data = .{ .opt_token_and_node = .{
+            mut_token,
+            operand,
+        } },
+    });
+}
+
+fn isLainaaIdent(p: *Parse, tok: TokenIndex) bool {
+    const slice = p.source[p.tokenStart(tok)..p.tokenStart(tok + 1)];
+    return std.mem.eql(u8, std.mem.trimEnd(u8, slice, &std.ascii.whitespace), "lainaa");
+}
+
+fn isMutIdent(p: *Parse, tok: TokenIndex) bool {
+    const slice = p.source[p.tokenStart(tok)..p.tokenStart(tok + 1)];
+    return std.mem.eql(u8, std.mem.trimEnd(u8, slice, &std.ascii.whitespace), "mut");
+}
+
 /// TestDecl <- KEYWORD_test (STRINGLITERALSINGLE / IDENTIFIER)? Block
 fn expectTestDecl(p: *Parse) Error!Node.Index {
     const test_token = p.assertToken(.keyword_test);
@@ -2084,6 +2114,27 @@ fn parsePrimaryExpr(p: *Parse) !?Node.Index {
                 isVaaraIdent(p, p.tok_i))
             {
                 return try p.parseVaaraBlock();
+            }
+            // Väinölang V-2 M2b-i: `lainaa x` / `lainaa mut x`. Only when
+            // the next token is an identifier (keeps calls, variables and
+            // binary continuations untouched); the `mut` form additionally
+            // needs an operand-starting token after `mut`.
+            if (isLainaaIdent(p, p.tok_i) and
+                p.tokenTag(p.tok_i + 1) == .identifier)
+            {
+                if (isMutIdent(p, p.tok_i + 1)) {
+                    // `true`/`false`/`null`/`undefined` lex as identifiers.
+                    switch (p.tokenTag(p.tok_i + 2)) {
+                        .identifier,
+                        .number_literal,
+                        .string_literal,
+                        .char_literal,
+                        => return try p.parseLainaa(true),
+                        else => {},
+                    }
+                } else {
+                    return try p.parseLainaa(false);
+                }
             }
             if (p.tokenTag(p.tok_i + 1) == .colon) {
                 switch (p.tokenTag(p.tok_i + 2)) {

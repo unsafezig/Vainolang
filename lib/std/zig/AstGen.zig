@@ -53,6 +53,17 @@ fn_ret_ty: Zir.Inst.Ref = .none,
 /// Maps string table indexes to the first `@import` ZIR instruction
 /// that uses this string as the operand.
 imports: std.AutoArrayHashMapUnmanaged(Zir.NullTerminatedString, Ast.TokenIndex) = .empty,
+/// Väinölang V-2 M2b-i: lexical borrow tracking. Only populated when the
+/// file contains `lainaa` syntax; plain code pays nothing (all hooks
+/// check `lainaa_seen` first). Keys are name-decl keyword tokens
+/// (`token_src`, file-stable); values reference AST nodes (file-stable).
+/// No scope pointers are stored: LocalVal/LocalPtr nodes die with their
+/// block arena, but tokens and nodes outlive the whole file.
+lainaa_seen: bool = false,
+/// Owner decl token -> live borrows of that owner.
+lainaa_borrows: std.AutoHashMapUnmanaged(Ast.TokenIndex, std.ArrayListUnmanaged(LainaaBorrow)) = .empty,
+/// Handle decl token -> owner decl token (`const r = lainaa x`).
+lainaa_handles: std.AutoHashMapUnmanaged(Ast.TokenIndex, Ast.TokenIndex) = .empty,
 /// Used for temporary storage when building payloads.
 scratch: std.ArrayList(u32) = .empty,
 /// Whenever a `ref` instruction is needed, it is created and saved in this
@@ -524,6 +535,7 @@ fn lvalExpr(gz: *GenZir, scope: *Scope, node: Ast.Node.Index) InnerError!Zir.Ins
         .while_cont,
         .bool_not,
         .address_of,
+        .lainaa,
         .optional_type,
         .block,
         .vaara_block,
@@ -630,6 +642,368 @@ fn lvalExpr(gz: *GenZir, scope: *Scope, node: Ast.Node.Index) InnerError!Zir.Ins
     }
     return expr(gz, scope, .{ .rl = .ref }, node);
 }
+
+/// Väinölang V-2 M2b-i: lexical borrow tracking (see LANGUAGE.md §4.2).
+/// A borrow entry records one `lainaa` on one owner binding.
+const LainaaBorrow = struct {
+    /// Innermost enclosing boundary AST node at the borrow site
+    /// (block/if/for/while/switch/fn/test). Liveness is purely lexical:
+    /// a borrow is live at a use iff this node contains the use.
+    boundary: Ast.Node.Index,
+    /// The `lainaa` AST node, for error notes.
+    node: Ast.Node.Index,
+    is_mut: bool,
+};
+
+/// Result of resolving a borrow-related identifier to a local binding.
+const LainaaTarget = union(enum) {
+    /// A function-local binding (its scope node).
+    local: *Scope,
+    /// A namespace/global member, or a binding across a function
+    /// boundary: borrowing is not supported there in M2b-i.
+    nonlocal,
+    /// Not found: leave it to normal lowering to report.
+    undeclared,
+};
+
+/// Boundary tags for borrow liveness: a borrow created inside one of
+/// these is dead outside of it.
+fn lainaaIsBoundary(tag: Ast.Node.Tag) bool {
+    return switch (tag) {
+        .block,
+        .block_semicolon,
+        .block_two,
+        .block_two_semicolon,
+        .@"if",
+        .if_simple,
+        .@"for",
+        .for_simple,
+        .@"while",
+        .while_simple,
+        .while_cont,
+        .@"switch",
+        .switch_comma,
+        .fn_decl,
+        .test_decl,
+        => true,
+        else => false,
+    };
+}
+
+/// Smallest boundary node containing `node` (by token range).
+fn lainaaBoundary(tree: *const Ast, node: Ast.Node.Index) Ast.Node.Index {
+    const start = tree.tokenStart(tree.firstToken(node));
+    const end = tree.tokenStart(tree.lastToken(node)) + 1;
+    var best: Ast.Node.Index = .root;
+    var best_len: u32 = std.math.maxInt(u32);
+    var i: u32 = 0;
+    const nodes_len: u32 = @intCast(tree.nodes.len);
+    while (i < nodes_len) : (i += 1) {
+        const cand: Ast.Node.Index = @enumFromInt(i);
+        if (cand == node) continue;
+        if (!lainaaIsBoundary(tree.nodeTag(cand))) continue;
+        const c_start = tree.tokenStart(tree.firstToken(cand));
+        const c_end = tree.tokenStart(tree.lastToken(cand)) + 1;
+        if (c_start <= start and end <= c_end) {
+            const len = c_end - c_start;
+            if (len < best_len) {
+                best = cand;
+                best_len = len;
+            }
+        }
+    }
+    return best;
+}
+
+/// True iff `use_node` lies within `boundary` (borrow still live).
+fn lainaaIsLiveAt(tree: *const Ast, boundary: Ast.Node.Index, use_node: Ast.Node.Index) bool {
+    if (boundary == .root) return true;
+    const b_start = tree.tokenStart(tree.firstToken(boundary));
+    const b_end = tree.tokenStart(tree.lastToken(boundary)) + 1;
+    const u_start = tree.tokenStart(tree.firstToken(use_node));
+    const u_end = tree.tokenStart(tree.lastToken(use_node)) + 1;
+    return b_start <= u_start and u_end <= b_end;
+}
+
+/// Resolve an identifier to a function-local binding for borrow checking.
+/// Pure lookup: never touches used/discarded markers (normal lowering does).
+fn lainaaResolve(gz: *GenZir, scope: *Scope, ident_token: Ast.TokenIndex) !LainaaTarget {
+    const astgen = gz.astgen;
+    const name = try astgen.identAsString(ident_token);
+    var cur: ?*Scope = scope;
+    while (cur) |s| {
+        switch (s.unwrap()) {
+            .local_val => |lv| {
+                if (lv.name == name) {
+                    if (lv.gen_zir.decl_node_index != gz.decl_node_index) return .nonlocal;
+                    return .{ .local = s };
+                }
+                cur = lv.parent;
+            },
+            .local_ptr => |lp| {
+                if (lp.name == name) {
+                    if (lp.gen_zir.decl_node_index != gz.decl_node_index) return .nonlocal;
+                    return .{ .local = s };
+                }
+                cur = lp.parent;
+            },
+            .gen_zir => |sub| cur = sub.parent,
+            .defer_normal, .defer_error => |d| cur = d.parent,
+            .namespace => |ns| {
+                if (ns.decls.get(name) != null) return .nonlocal;
+                cur = ns.parent;
+            },
+            .top => return .undeclared,
+        }
+    }
+    return .undeclared;
+}
+
+/// Decl keyword token of a local scope node (stable key for borrow maps).
+fn lainaaDeclToken(scope: *Scope) ?Ast.TokenIndex {
+    switch (scope.tag) {
+        .local_val => return scope.cast(Scope.LocalVal).?.token_src,
+        .local_ptr => return scope.cast(Scope.LocalPtr).?.token_src,
+        else => return null,
+    }
+}
+
+/// True if the local binding may be mutably borrowed (plain `var` only).
+fn lainaaIsMutable(scope: *Scope) bool {
+    switch (scope.tag) {
+        .local_val => return false,
+        .local_ptr => return scope.cast(Scope.LocalPtr).?.id_cat == .@"local variable",
+        else => return false,
+    }
+}
+
+/// Record a borrow after the exclusivity check. Owner scope must be local.
+fn lainaaNoteBorrow(
+    gz: *GenZir,
+    lainaa_node: Ast.Node.Index,
+    owner: *Scope,
+    is_mut: bool,
+) !void {
+    const astgen = gz.astgen;
+    const tree = astgen.tree;
+    const owner_token = lainaaDeclToken(owner).?;
+    const boundary = lainaaBoundary(tree, lainaa_node);
+    const gop = try astgen.lainaa_borrows.getOrPut(astgen.arena, owner_token);
+    if (!gop.found_existing) gop.value_ptr.* = .empty;
+    const list = gop.value_ptr;
+    for (list.items) |existing| {
+        if (!lainaaIsLiveAt(tree, existing.boundary, lainaa_node)) continue;
+        if (is_mut or existing.is_mut) {
+            const name = tree.tokenSlice(owner_token);
+            return astgen.failNodeNotes(lainaa_node, "conflicting borrow of '{s}'", .{name}, &.{
+                try astgen.errNoteNode(existing.node, "previous borrow here", .{}),
+            });
+        }
+    }
+    try list.append(astgen.arena, .{
+        .boundary = boundary,
+        .node = lainaa_node,
+        .is_mut = is_mut,
+    });
+}
+
+/// Lower `lainaa x` / `lainaa mut x`: check the borrow, then emit the
+/// same code as address-of (the value semantics are identical; only the
+/// checking is new). No ZIR marker: Zir.Inst.Tag is full, and Sema needs
+/// nothing beyond the pointer.
+fn genLainaa(
+    gz: *GenZir,
+    scope: *Scope,
+    ri: ResultInfo,
+    node: Ast.Node.Index,
+) InnerError!Zir.Inst.Ref {
+    const astgen = gz.astgen;
+    const tree = astgen.tree;
+    astgen.lainaa_seen = true;
+    if (gz.is_comptime) {
+        return astgen.failNode(node, "lainaa in comptime expressions is not supported", .{});
+    }
+    const lain_data = tree.nodeData(node).opt_token_and_node;
+    const is_mut = lain_data[0].unwrap() != null;
+    const operand_node = lain_data[1];
+    if (tree.nodeTag(operand_node) != .identifier) {
+        return astgen.failNode(operand_node, "lainaa operand must be a local variable", .{});
+    }
+    const ident_token = tree.nodeMainToken(operand_node);
+    const owner = switch (try lainaaResolve(gz, scope, ident_token)) {
+        .local => |s| s,
+        .nonlocal => return astgen.failTok(
+            ident_token,
+            "cannot borrow non-local binding",
+            .{},
+        ),
+        .undeclared => {
+            // Not ours to report; normal lowering emits the error below.
+            // Still lower like address-of so recovery keeps working.
+            return genLainaaUnchecked(gz, scope, ri, node, operand_node);
+        },
+    };
+    if (is_mut and !lainaaIsMutable(owner)) {
+        const name = tree.tokenSlice(tree.nodeMainToken(operand_node));
+        return astgen.failNode(node, "cannot mutably borrow const variable '{s}'", .{name});
+    }
+    try lainaaNoteBorrow(gz, node, owner, is_mut);
+    return genLainaaUnchecked(gz, scope, ri, node, operand_node);
+}
+
+/// Shared operand lowering for both checked and unchecked paths.
+/// Identical to address-of: the borrow IS the pointer. No ZIR marker
+/// is emitted (Zir.Inst.Tag is full) — all checking happened above.
+fn genLainaaUnchecked(
+    gz: *GenZir,
+    scope: *Scope,
+    ri: ResultInfo,
+    node: Ast.Node.Index,
+    operand_node: Ast.Node.Index,
+) InnerError!Zir.Inst.Ref {
+    const astgen = gz.astgen;
+    const tree = astgen.tree;
+    const operand_rl: ResultInfo.Loc = if (try ri.rl.resultType(gz, node)) |res_ty_inst| rl: {
+        _ = try gz.addUnTok(.validate_ref_ty, res_ty_inst, tree.firstToken(node));
+        break :rl .{ .ref_coerced_ty = res_ty_inst };
+    } else .ref;
+    const result = try expr(gz, scope, .{
+        .rl = operand_rl,
+        .ctx = .none,
+    }, operand_node);
+    return rvalue(gz, ri, result, node);
+}
+
+/// Record `const r = lainaa x` (or `var`): `r` becomes a borrow handle
+/// for the owner. Called with the fresh decl scope from blockExprStmts.
+fn lainaaNoteDeclInit(
+    gz: *GenZir,
+    new_scope: *Scope,
+    statement: Ast.Node.Index,
+) !void {
+    const astgen = gz.astgen;
+    if (!astgen.lainaa_seen) return;
+    const tree = astgen.tree;
+    const full = tree.fullVarDecl(statement) orelse return;
+    const init_node = full.ast.init_node.unwrap() orelse return;
+    if (tree.nodeTag(init_node) != .lainaa) return;
+    const handle_token = lainaaDeclToken(new_scope) orelse return;
+    const lain_data = tree.nodeData(init_node).opt_token_and_node;
+    const op_node = lain_data[1];
+    if (tree.nodeTag(op_node) != .identifier) return;
+    // The new decl shadows its own name in its init (`const x = lainaa x`
+    // sees the *outer* x): resolve past it when names match.
+    const op_token = tree.nodeMainToken(op_node);
+    const new_name_token = full.ast.mut_token + 1;
+    var start_scope: ?*Scope = new_scope;
+    if (std.mem.eql(u8, tree.tokenSlice(op_token), tree.tokenSlice(new_name_token))) {
+        start_scope = new_scope.parent();
+    }
+    const s = start_scope orelse return;
+    const owner_tok = switch (try lainaaResolve(gz, s, op_token)) {
+        .local => |owner| lainaaDeclToken(owner) orelse return,
+        .nonlocal, .undeclared => return,
+    };
+    try astgen.lainaa_handles.put(astgen.arena, handle_token, owner_tok);
+}
+
+/// Assignment check: assigning to a borrowed owner invalidates the
+/// borrow (error); storing a borrow handle (or a direct `lainaa`
+/// result) must not escape to globals or non-local storage.
+fn lainaaCheckAssign(
+    gz: *GenZir,
+    scope: *Scope,
+    infix_node: Ast.Node.Index,
+) !void {
+    const astgen = gz.astgen;
+    if (!astgen.lainaa_seen) return;
+    const tree = astgen.tree;
+    const lhs_node, const rhs_node = tree.nodeData(infix_node).node_and_node;
+    // Reinit rule: plain-identifier LHS with live borrows.
+    if (tree.nodeTag(lhs_node) == .identifier) {
+        const name = tree.tokenSlice(tree.nodeMainToken(lhs_node));
+        if (!mem.eql(u8, name, "_")) {
+            const ident_token = tree.nodeMainToken(lhs_node);
+            switch (try lainaaResolve(gz, scope, ident_token)) {
+                .local => |owner| {
+                    if (lainaaDeclToken(owner)) |owner_token| {
+                        if (astgen.lainaa_borrows.get(owner_token)) |list| {
+                            for (list.items) |existing| {
+                                if (!lainaaIsLiveAt(tree, existing.boundary, infix_node)) continue;
+                                const oname = tree.tokenSlice(owner_token);
+                                return astgen.failTokNotes(ident_token, "cannot assign to borrowed variable '{s}'", .{oname}, &.{
+                                    try astgen.errNoteNode(existing.node, "borrow is live here", .{}),
+                                });
+                            }
+                        }
+                    }
+                },
+                .nonlocal, .undeclared => {},
+            }
+        }
+    }
+    // Escape rule: borrowed values stored into non-local storage.
+    const rhs_borrowed = switch (tree.nodeTag(rhs_node)) {
+        .lainaa => true,
+        .identifier => blk: {
+            const ident_token = tree.nodeMainToken(rhs_node);
+            switch (try lainaaResolve(gz, scope, ident_token)) {
+                .local => |owner| {
+                    const owner_token = lainaaDeclToken(owner) orelse break :blk false;
+                    break :blk astgen.lainaa_handles.get(owner_token) != null;
+                },
+                .nonlocal, .undeclared => break :blk false,
+            }
+        },
+        else => false,
+    };
+    if (!rhs_borrowed) return;
+    if (tree.nodeTag(lhs_node) == .identifier) {
+        const ident_token = tree.nodeMainToken(lhs_node);
+        switch (try lainaaResolve(gz, scope, ident_token)) {
+            .local => return, // same-or-inner scope store: allowed.
+            .nonlocal => return astgen.failTok(
+                ident_token,
+                "borrow escapes to non-local storage",
+                .{},
+            ),
+            .undeclared => return,
+        }
+    }
+    return astgen.failNode(
+        infix_node,
+        "cannot store borrowed value here",
+        .{},
+    );
+}
+/// Escape check for `return` operands: a borrow handle (or a direct
+/// `lainaa` result) must not leave the function.
+fn lainaaCheckEscape(
+    gz: *GenZir,
+    scope: *Scope,
+    site_node: Ast.Node.Index,
+    operand_node: Ast.Node.Index,
+    comptime msg: []const u8,
+) !void {
+    const astgen = gz.astgen;
+    const tree = astgen.tree;
+    const tag = tree.nodeTag(operand_node);
+    if (tag == .lainaa) {
+        return astgen.failNode(site_node, msg, .{});
+    }
+    if (tag != .identifier) return;
+    const ident_token = tree.nodeMainToken(operand_node);
+    switch (try lainaaResolve(gz, scope, ident_token)) {
+        .local => |owner| {
+            const owner_token = lainaaDeclToken(owner) orelse return;
+            if (astgen.lainaa_handles.get(owner_token) != null) {
+                return astgen.failNode(site_node, msg, .{});
+            }
+        },
+        .nonlocal, .undeclared => {},
+    }
+}
+
 
 /// Turn Zig AST into untyped ZIR instructions.
 /// When `rl` is discard, ptr, inferred_ptr, or inferred_ptr, the
@@ -967,6 +1341,7 @@ fn expr(gz: *GenZir, scope: *Scope, ri: ResultInfo, node: Ast.Node.Index) InnerE
             }, operand_node);
             return rvalue(gz, ri, result, node);
         },
+        .lainaa => return genLainaa(gz, scope, ri, node),
         .optional_type => {
             const operand = try typeExpr(gz, scope, tree.nodeData(node).node);
             const result = try gz.addUnNode(.optional_type, operand, node);
@@ -2635,7 +3010,11 @@ fn blockExprStmts(gz: *GenZir, parent_scope: *Scope, statements: []const Ast.Nod
                 .global_var_decl,
                 .local_var_decl,
                 .simple_var_decl,
-                .aligned_var_decl, => scope = try varDecl(gz, scope, statement, block_arena_allocator, tree.fullVarDecl(statement).?),
+                .aligned_var_decl, => {
+                    scope = try varDecl(gz, scope, statement, block_arena_allocator, tree.fullVarDecl(statement).?);
+                    // Väinölang V-2 M2b-i: record borrow handles.
+                    try lainaaNoteDeclInit(gz, scope, statement);
+                },
 
                 .assign_destructure => scope = try assignDestructureMaybeDecls(gz, scope, statement, block_arena_allocator),
 
@@ -3487,6 +3866,9 @@ fn assign(gz: *GenZir, scope: *Scope, infix_node: Ast.Node.Index) InnerError!voi
     const astgen = gz.astgen;
     const tree = astgen.tree;
 
+    // Väinölang V-2 M2b-i: reinit-invalidation + handle store rule.
+    try lainaaCheckAssign(gz, scope, infix_node);
+
     const lhs, const rhs = tree.nodeData(infix_node).node_and_node;
     if (tree.nodeTag(lhs) == .identifier) {
         // This intentionally does not support `@"_"` syntax.
@@ -3789,6 +4171,8 @@ fn assignOp(
     const astgen = gz.astgen;
     const tree = astgen.tree;
 
+    // Väinölang V-2 M2b-i: mutating a borrowed owner invalidates borrows.
+    try lainaaCheckAssign(gz, scope, infix_node);
     const lhs_node, const rhs_node = tree.nodeData(infix_node).node_and_node;
     const lhs_ptr = try lvalExpr(gz, scope, lhs_node);
 
@@ -3844,6 +4228,8 @@ fn assignShift(
     const astgen = gz.astgen;
     const tree = astgen.tree;
 
+    // Väinölang V-2 M2b-i: mutating a borrowed owner invalidates borrows.
+    try lainaaCheckAssign(gz, scope, infix_node);
     const lhs_node, const rhs_node = tree.nodeData(infix_node).node_and_node;
     const lhs_ptr = try lvalExpr(gz, scope, lhs_node);
     const lhs = try gz.addUnNode(.load, lhs_ptr, infix_node);
@@ -8053,6 +8439,11 @@ fn ret(gz: *GenZir, scope: *Scope, node: Ast.Node.Index) InnerError!Zir.Inst.Ref
         return Zir.Inst.Ref.unreachable_value;
     };
 
+    // Väinölang V-2 M2b-i: borrowed values must not escape via return.
+    if (astgen.lainaa_seen) {
+        try lainaaCheckEscape(gz, scope, node, operand_node, "cannot return borrowed value");
+    }
+
     if (tree.nodeTag(operand_node) == .error_value) {
         // Hot path for `return error.Foo`. This bypasses result location logic as well as logic
         // for detecting whether to add something to the function's inferred error set.
@@ -10453,6 +10844,7 @@ fn nodeMayEvalToError(tree: *const Ast, start_node: Ast.Node.Index) BuiltinFn.Ev
             .@"defer",
             .@"errdefer",
             .address_of,
+            .lainaa,
             .optional_type,
             .negation,
             .negation_wrap,

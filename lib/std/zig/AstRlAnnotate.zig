@@ -478,6 +478,11 @@ fn expr(astrl: *AstRlAnnotate, node: Ast.Node.Index, block: ?*Block, ri: ResultI
             _ = try astrl.expr(tree.nodeData(node).node, block, ResultInfo.none);
             return false;
         },
+        // Väinölang V-2 M2b-i: borrow operand needs no result location.
+        .lainaa => {
+            _ = try astrl.expr(tree.nodeData(node).opt_token_and_node[1], block, ResultInfo.none);
+            return false;
+        },
         .optional_type => {
             _ = try astrl.expr(tree.nodeData(node).node, block, ResultInfo.type_only);
             return false;

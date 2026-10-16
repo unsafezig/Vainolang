@@ -648,6 +648,7 @@ pub fn firstToken(tree: Ast, node: Node.Index) TokenIndex {
         .array_type_sentinel,
         .error_value,
         .vaara_block,
+        .lainaa,
         => return tree.nodeMainToken(n) - end_offset,
 
         .array_init_dot,
@@ -955,7 +956,7 @@ pub fn lastToken(tree: Ast, node: Node.Index) TokenIndex {
         .switch_range,
         => n = tree.nodeData(n).node_and_node[1],
 
-        .test_decl, .@"errdefer", .vaara_block => n = tree.nodeData(n).opt_token_and_node[1],
+        .test_decl, .@"errdefer", .vaara_block, .lainaa => n = tree.nodeData(n).opt_token_and_node[1],
         .@"defer" => n = tree.nodeData(n).node,
         .anyframe_type => n = tree.nodeData(n).token_and_node[1],
 
@@ -3859,6 +3860,15 @@ pub const Node = struct {
         ///
         /// The `main_token` field is the `vaara` identifier.
         vaara_block,
+        /// `lainaa x` / `lainaa mut x` (Väinölang V-2 M2b-i: borrow).
+        ///
+        /// The `data` field is a `.opt_token_and_node`:
+        ///   1. a `OptionalTokenIndex` to the `mut` identifier (`.none`
+        ///      for the shared form).
+        ///   2. a `Node.Index` to the borrowed operand.
+        ///
+        /// The `main_token` field is the `lainaa` identifier.
+        lainaa,
 
         pub fn isContainerField(tag: Tag) bool {
             return switch (tag) {

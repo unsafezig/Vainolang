@@ -606,6 +606,16 @@ fn renderExpression(r: *Render, node: Ast.Node.Index, space: Space) Error!void {
             return renderExpression(r, tree.nodeData(node).node, space);
         },
 
+        // Väinölang V-2 M2b-i: `lainaa x` / `lainaa mut x`.
+        .lainaa => {
+            try renderToken(r, tree.nodeMainToken(node), .space);
+            const lain_data = tree.nodeData(node).opt_token_and_node;
+            if (lain_data[0].unwrap()) |mut_tok| {
+                try renderToken(r, mut_tok, .space);
+            }
+            return renderExpression(r, lain_data[1], space);
+        },
+
         .@"try",
         .@"resume",
         => {

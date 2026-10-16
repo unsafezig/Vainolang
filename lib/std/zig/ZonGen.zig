@@ -281,6 +281,9 @@ fn expr(zg: *ZonGen, node: Ast.Node.Index, dest_node: Zoir.Node.Index) Allocator
         // wrapper node (body lives in `opt_token_and_node[1]`).
         .vaara_block => try zg.addErrorNode(node, "blocks are not allowed in ZON", .{}),
 
+        // Väinölang V-2 M2b-i: borrows are not available in ZON either.
+        .lainaa => try zg.addErrorNode(node, "borrows are not allowed in ZON", .{}),
+
         .array_init_one,
         .array_init_one_comma,
         .array_init,
