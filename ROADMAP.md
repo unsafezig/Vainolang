@@ -363,9 +363,17 @@ the language memory model instead of running two authorities.
   like `&x`; AstGen enforces exclusivity, no-escape (return/global),
   no-reassign-while-borrowed, const/nonlocal/comptime guards. 1 positive
   + 6 negative tests green; vaara tests + full `test-cases` green, no
-  regressions. Notable: `Zir.Inst.Tag` (`enum(u8)`) is FULL — no new
-  ZIR tags possible; borrow/move lower to existing constructs.
-  M2b-ii next: explicit move (`luovuta`) + use-after-move/double-move.
+   regressions. Notable: `Zir.Inst.Tag` (`enum(u8)`) is FULL — no new
+   ZIR tags possible; borrow/move lower to existing constructs.
+   M2b-ii next: explicit move (`luovuta`) + use-after-move/double-move.
+   **M2b-ii DONE 2026-10-16** (`exp/vaara`): `luovuta x` (contextual)
+   marks moved-from; later uses, double moves and moves-while-borrowed
+   are errors; plain `=` reinitializes; `return luovuta x` transfers.
+   Identity lowering, no ZIR tags. 1 positive + 5 negative tests green;
+   lainaa + vaara + full `test-cases` green, no regressions.
+   M2 COMPLETE: vaara gates (M2a) + borrow checking (M2b-i) + move
+   checking (M2b-ii). Next: M3 kernel migration or plan-B consumer
+   smoke of the borrow/move toolchain.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).

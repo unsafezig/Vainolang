@@ -161,6 +161,16 @@ move: the PMM-to-VMM-to-driver chain is a sequence of recorded transfers,
 not aliases. Two owners of one region is a compile error (M2) / lint
 error (M1).
 
+M2b-ii implements the explicit move (2026-10-16): `luovuta x`
+(contextual, no keyword) marks the local binding moved-from; any later
+use (call argument, return, operator, borrow) is a compile error, as are
+a second `luovuta` and moving while borrowed. A plain `=` gives the
+binding a fresh value and clears the mark; `return luovuta x` transfers
+out. Like borrows, moves lower to existing constructs (identity — no
+ZIR tag) and need no flag. Deliberate limits: plain-identifier operands
+and uses only; transitive aliases, field/index moves and block-result
+escapes are unchecked.
+
 #### Borrowing
 
 A pragmatic subset, with no lifetime inference in v1
