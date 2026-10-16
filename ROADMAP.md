@@ -393,6 +393,11 @@ the language memory model instead of running two authorities.
     stock host 324/324 ×2 + QEMU 4/4, stage3 host 324/324 ×2 + build +
     smoke. Seams typed for mechanical `luovuta` at the flip. Next:
     paging/VMM prep, then flip decision (M3b).
+    **M3b-prep DONE 2026-10-16**: paging/VMM transfer roles + `cpu-reg`
+    markers as comments (no syntax, no signature changes); stock QEMU 4/4
+    + vaara-lint, stage3 host/build/smoke. Flip map (seams + V-blocks)
+    recorded. Remaining: the WHEN of the branch toolchain flip (branch CI
+    has no M2 binary yet).
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
