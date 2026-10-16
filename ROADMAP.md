@@ -381,6 +381,12 @@ the language memory model instead of running two authorities.
     3 positives compile, 15 negatives error as specified).
     Next: plan-B consumer smoke of the borrow/move toolchain, then
     M3 kernel migration.
+    **Plan-B DONE 2026-10-16** (Zinux `exp/vainolang`, stage3-luovuta
+    dev.36 = this `main`: host 324/324 ×2, kernel builds + aarch64-verify
+    PASS, QEMU 4/4, strict probe = A5's 2 errors, vaara-lint OK;
+    one script-caused red (shared test-disk state pollution, green on
+    fresh disk — not a toolchain regression). Evidence: Zinux
+    `docs/PHASE0_EVIDENCE.md` §2026-10-16. M3 cleared to proceed.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
