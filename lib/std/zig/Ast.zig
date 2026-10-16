@@ -649,6 +649,7 @@ pub fn firstToken(tree: Ast, node: Node.Index) TokenIndex {
         .error_value,
         .vaara_block,
         .lainaa,
+        .luovuta,
         => return tree.nodeMainToken(n) - end_offset,
 
         .array_init_dot,
@@ -891,6 +892,7 @@ pub fn lastToken(tree: Ast, node: Node.Index) TokenIndex {
         .bit_not,
         .negation_wrap,
         .address_of,
+        .luovuta,
         .@"try",
         .optional_type,
         .@"suspend",
@@ -3869,6 +3871,12 @@ pub const Node = struct {
         ///
         /// The `main_token` field is the `lainaa` identifier.
         lainaa,
+        /// `luovuta x` (Väinölang V-2 M2b-ii: explicit move).
+        ///
+        /// The `data` field is a `.node`: the moved operand.
+        ///
+        /// The `main_token` field is the `luovuta` identifier.
+        luovuta,
 
         pub fn isContainerField(tag: Tag) bool {
             return switch (tag) {

@@ -619,6 +619,25 @@ fn isMutIdent(p: *Parse, tok: TokenIndex) bool {
     return std.mem.eql(u8, std.mem.trimEnd(u8, slice, &std.ascii.whitespace), "mut");
 }
 
+/// LuovutaOperand <- IDENTIFIER("luovuta") PrefixExpr.
+/// Contextual (Väinölang V-2 M2b-ii): only the exact `luovuta x` shape is
+/// special; any other use of an identifier spelled `luovuta` parses
+/// normally (`luovuta(x)` stays a call, `luovuta;` a variable).
+fn parseLuovuta(p: *Parse) Error!Node.Index {
+    const luovuta_token = p.nextToken();
+    const operand = try p.expectPrefixExpr();
+    return p.addNode(.{
+        .tag = .luovuta,
+        .main_token = luovuta_token,
+        .data = .{ .node = operand },
+    });
+}
+
+fn isLuovutaIdent(p: *Parse, tok: TokenIndex) bool {
+    const slice = p.source[p.tokenStart(tok)..p.tokenStart(tok + 1)];
+    return std.mem.eql(u8, std.mem.trimEnd(u8, slice, &std.ascii.whitespace), "luovuta");
+}
+
 /// TestDecl <- KEYWORD_test (STRINGLITERALSINGLE / IDENTIFIER)? Block
 fn expectTestDecl(p: *Parse) Error!Node.Index {
     const test_token = p.assertToken(.keyword_test);
@@ -2135,6 +2154,14 @@ fn parsePrimaryExpr(p: *Parse) !?Node.Index {
                 } else {
                     return try p.parseLainaa(false);
                 }
+            }
+            // Väinölang V-2 M2b-ii: `luovuta x`. Only when the next token
+            // is an identifier (keeps calls, variables and binary
+            // continuations untouched).
+            if (isLuovutaIdent(p, p.tok_i) and
+                p.tokenTag(p.tok_i + 1) == .identifier)
+            {
+                return try p.parseLuovuta();
             }
             if (p.tokenTag(p.tok_i + 1) == .colon) {
                 switch (p.tokenTag(p.tok_i + 2)) {

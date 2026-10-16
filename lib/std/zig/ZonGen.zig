@@ -284,6 +284,9 @@ fn expr(zg: *ZonGen, node: Ast.Node.Index, dest_node: Zoir.Node.Index) Allocator
         // Väinölang V-2 M2b-i: borrows are not available in ZON either.
         .lainaa => try zg.addErrorNode(node, "borrows are not allowed in ZON", .{}),
 
+        // Väinölang V-2 M2b-ii: moves are not available in ZON either.
+        .luovuta => try zg.addErrorNode(node, "moves are not allowed in ZON", .{}),
+
         .array_init_one,
         .array_init_one_comma,
         .array_init,

@@ -615,6 +615,11 @@ fn renderExpression(r: *Render, node: Ast.Node.Index, space: Space) Error!void {
             }
             return renderExpression(r, lain_data[1], space);
         },
+        // Väinölang V-2 M2b-ii: `luovuta x`.
+        .luovuta => {
+            try renderToken(r, tree.nodeMainToken(node), .space);
+            return renderExpression(r, tree.nodeData(node).node, space);
+        },
 
         .@"try",
         .@"resume",

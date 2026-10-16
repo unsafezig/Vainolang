@@ -64,6 +64,12 @@ lainaa_seen: bool = false,
 lainaa_borrows: std.AutoHashMapUnmanaged(Ast.TokenIndex, std.ArrayListUnmanaged(LainaaBorrow)) = .empty,
 /// Handle decl token -> owner decl token (`const r = lainaa x`).
 lainaa_handles: std.AutoHashMapUnmanaged(Ast.TokenIndex, Ast.TokenIndex) = .empty,
+/// Owner decl token -> `luovuta` site node (moved-from bindings, M2b-ii).
+/// Cleared by plain `=` reinitialization.
+lainaa_moved: std.AutoHashMapUnmanaged(Ast.TokenIndex, Ast.Node.Index) = .empty,
+/// Guard counter: while >0, identifier-use checking is skipped (the
+/// operand of `lainaa`/`luovuta` itself is being lowered).
+lainaa_marker_guard: u32 = 0,
 /// Used for temporary storage when building payloads.
 scratch: std.ArrayList(u32) = .empty,
 /// Whenever a `ref` instruction is needed, it is created and saved in this
@@ -536,6 +542,7 @@ fn lvalExpr(gz: *GenZir, scope: *Scope, node: Ast.Node.Index) InnerError!Zir.Ins
         .bool_not,
         .address_of,
         .lainaa,
+        .luovuta,
         .optional_type,
         .block,
         .vaara_block,
@@ -847,7 +854,16 @@ fn genLainaa(
         const name = tree.tokenSlice(tree.nodeMainToken(operand_node));
         return astgen.failNode(node, "cannot mutably borrow const variable '{s}'", .{name});
     }
+    const owner_token = lainaaDeclToken(owner).?;
+    if (astgen.lainaa_moved.get(owner_token)) |prev| {
+        const name = tree.tokenSlice(owner_token);
+        return astgen.failNodeNotes(node, "cannot borrow moved-from variable '{s}'", .{name}, &.{
+            try astgen.errNoteNode(prev, "moved here", .{}),
+        });
+    }
     try lainaaNoteBorrow(gz, node, owner, is_mut);
+    astgen.lainaa_marker_guard += 1;
+    defer astgen.lainaa_marker_guard -= 1;
     return genLainaaUnchecked(gz, scope, ri, node, operand_node);
 }
 
@@ -910,10 +926,13 @@ fn lainaaNoteDeclInit(
 /// Assignment check: assigning to a borrowed owner invalidates the
 /// borrow (error); storing a borrow handle (or a direct `lainaa`
 /// result) must not escape to globals or non-local storage.
+/// A plain `=` reinitializes: it additionally clears moved-from state.
+/// Compound assigns read the old value, so they never clear.
 fn lainaaCheckAssign(
     gz: *GenZir,
     scope: *Scope,
     infix_node: Ast.Node.Index,
+    is_reinit: bool,
 ) !void {
     const astgen = gz.astgen;
     if (!astgen.lainaa_seen) return;
@@ -936,6 +955,9 @@ fn lainaaCheckAssign(
                                 });
                             }
                         }
+                        // Plain `=` gives the binding a fresh value: it is
+                        // no longer moved-from. Compound assigns read first.
+                        if (is_reinit) _ = astgen.lainaa_moved.remove(owner_token);
                     }
                 },
                 .nonlocal, .undeclared => {},
@@ -1004,6 +1026,82 @@ fn lainaaCheckEscape(
     }
 }
 
+
+/// Error if the binding is marked moved-from (M2b-ii use after move).
+/// Skipped while lowering a marker operand itself, and when the file
+/// contains no borrow/move syntax at all.
+fn lainaaCheckUse(
+    gz: *GenZir,
+    owner_token: Ast.TokenIndex,
+    ident: Ast.Node.Index,
+) !void {
+    const astgen = gz.astgen;
+    if (!astgen.lainaa_seen) return;
+    if (astgen.lainaa_marker_guard != 0) return;
+    const tree = astgen.tree;
+    const move_node = astgen.lainaa_moved.get(owner_token) orelse return;
+    const name = tree.tokenSlice(owner_token);
+    return astgen.failNodeNotes(ident, "use after move of '{s}'", .{name}, &.{
+        try astgen.errNoteNode(move_node, "moved here", .{}),
+    });
+}
+
+/// Lower `luovuta x`: check the move, then evaluate the operand as-is
+/// (identity — no ZIR marker; the transfer is recorded, not encoded).
+fn genLuovuta(
+    gz: *GenZir,
+    scope: *Scope,
+    ri: ResultInfo,
+    node: Ast.Node.Index,
+) InnerError!Zir.Inst.Ref {
+    const astgen = gz.astgen;
+    const tree = astgen.tree;
+    astgen.lainaa_seen = true;
+    if (gz.is_comptime) {
+        return astgen.failNode(node, "luovuta in comptime expressions is not supported", .{});
+    }
+    const operand_node = tree.nodeData(node).node;
+    if (tree.nodeTag(operand_node) != .identifier) {
+        return astgen.failNode(operand_node, "luovuta operand must be a local variable", .{});
+    }
+    const ident_token = tree.nodeMainToken(operand_node);
+    const owner_token = switch (try lainaaResolve(gz, scope, ident_token)) {
+        .local => |owner| lainaaDeclToken(owner) orelse return astgen.failTok(
+            ident_token,
+            "cannot move non-local binding",
+            .{},
+        ),
+        .nonlocal => return astgen.failTok(
+            ident_token,
+            "cannot move non-local binding",
+            .{},
+        ),
+        .undeclared => {
+            // Not ours to report; normal lowering emits the error below.
+            return expr(gz, scope, ri, operand_node);
+        },
+    };
+    if (astgen.lainaa_moved.get(owner_token)) |prev| {
+        const name = tree.tokenSlice(owner_token);
+        return astgen.failNodeNotes(node, "double move of '{s}'", .{name}, &.{
+            try astgen.errNoteNode(prev, "already moved here", .{}),
+        });
+    }
+    // Moving with live borrows would dangle them.
+    if (astgen.lainaa_borrows.get(owner_token)) |list| {
+        for (list.items) |existing| {
+            if (!lainaaIsLiveAt(tree, existing.boundary, node)) continue;
+            const name = tree.tokenSlice(owner_token);
+            return astgen.failNodeNotes(node, "cannot move borrowed variable '{s}'", .{name}, &.{
+                try astgen.errNoteNode(existing.node, "borrow is live here", .{}),
+            });
+        }
+    }
+    try astgen.lainaa_moved.put(astgen.arena, owner_token, node);
+    astgen.lainaa_marker_guard += 1;
+    defer astgen.lainaa_marker_guard -= 1;
+    return expr(gz, scope, ri, operand_node);
+}
 
 /// Turn Zig AST into untyped ZIR instructions.
 /// When `rl` is discard, ptr, inferred_ptr, or inferred_ptr, the
@@ -1342,6 +1440,7 @@ fn expr(gz: *GenZir, scope: *Scope, ri: ResultInfo, node: Ast.Node.Index) InnerE
             return rvalue(gz, ri, result, node);
         },
         .lainaa => return genLainaa(gz, scope, ri, node),
+        .luovuta => return genLuovuta(gz, scope, ri, node),
         .optional_type => {
             const operand = try typeExpr(gz, scope, tree.nodeData(node).node);
             const result = try gz.addUnNode(.optional_type, operand, node);
@@ -3866,8 +3965,9 @@ fn assign(gz: *GenZir, scope: *Scope, infix_node: Ast.Node.Index) InnerError!voi
     const astgen = gz.astgen;
     const tree = astgen.tree;
 
-    // Väinölang V-2 M2b-i: reinit-invalidation + handle store rule.
-    try lainaaCheckAssign(gz, scope, infix_node);
+    // Väinölang V-2 M2b-i/ii: reinit-invalidation + handle store rule;
+    // plain `=` also clears moved-from state.
+    try lainaaCheckAssign(gz, scope, infix_node, true);
 
     const lhs, const rhs = tree.nodeData(infix_node).node_and_node;
     if (tree.nodeTag(lhs) == .identifier) {
@@ -4172,7 +4272,8 @@ fn assignOp(
     const tree = astgen.tree;
 
     // Väinölang V-2 M2b-i: mutating a borrowed owner invalidates borrows.
-    try lainaaCheckAssign(gz, scope, infix_node);
+    // Compound assigns read first, so never reinitialize.
+    try lainaaCheckAssign(gz, scope, infix_node, false);
     const lhs_node, const rhs_node = tree.nodeData(infix_node).node_and_node;
     const lhs_ptr = try lvalExpr(gz, scope, lhs_node);
 
@@ -4229,7 +4330,8 @@ fn assignShift(
     const tree = astgen.tree;
 
     // Väinölang V-2 M2b-i: mutating a borrowed owner invalidates borrows.
-    try lainaaCheckAssign(gz, scope, infix_node);
+    // Compound assigns read first, so never reinitialize.
+    try lainaaCheckAssign(gz, scope, infix_node, false);
     const lhs_node, const rhs_node = tree.nodeData(infix_node).node_and_node;
     const lhs_ptr = try lvalExpr(gz, scope, lhs_node);
     const lhs = try gz.addUnNode(.load, lhs_ptr, infix_node);
@@ -8675,6 +8777,8 @@ fn localVarRef(
             if (local_val.name == name_str_index) {
                 // Locals cannot shadow anything, so we do not need to look for ambiguous
                 // references in this case.
+                // Väinölang V-2 M2b-ii: use after move.
+                try lainaaCheckUse(gz, local_val.token_src, ident);
                 if (ri.rl == .discard and ri.ctx == .assignment) {
                     local_val.discarded = .fromToken(ident_token);
                 } else {
@@ -8698,6 +8802,8 @@ fn localVarRef(
         },
         .local_ptr => |local_ptr| {
             if (local_ptr.name == name_str_index) {
+                // Väinölang V-2 M2b-ii: use after move.
+                try lainaaCheckUse(gz, local_ptr.token_src, ident);
                 if (ri.rl == .discard and ri.ctx == .assignment) {
                     local_ptr.discarded = .fromToken(ident_token);
                 } else {
@@ -10845,6 +10951,7 @@ fn nodeMayEvalToError(tree: *const Ast, start_node: Ast.Node.Index) BuiltinFn.Ev
             .@"errdefer",
             .address_of,
             .lainaa,
+            .luovuta,
             .optional_type,
             .negation,
             .negation_wrap,
