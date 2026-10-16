@@ -450,6 +450,36 @@ $p build --zig-lib-dir <repo>/lib -p ~/deps/stage3-vaara \
   changes do NOT change cache digests. After any compiler-side change,
   nuke `.zig-cache-vaara` + `cache-vaara` before trusting test results
   (a pre-fix parse error survived as a cache hit and masked the fix).
+  Bit again in M2b-i: same-version rebuilds need the same nuke.
+- Silent `EXIT:0` can be vacuous: a `-Dtest-filter` matching nothing
+  also exits 0 silently. Verify genuine execution with a
+  broken-expectation probe (temporarily wrong column → must fail).
+- `Zir.Inst.Tag` is `enum(u8)` and FULL (256) — no new ZIR tags, ever.
+  New syntax must lower to existing constructs (`lainaa` ≡ `&x`,
+  `luovuta` ≡ identity). Sema needs nothing; checking lives in AstGen.
+- `AutoHashMapUnmanaged.getOrPut` leaves the value UNINITIALIZED on
+  first insert: always `if (!gop.found_existing) gop.value_ptr.* = ...`.
+  Reading it first segfaults (garbage address like `0xffffffffffffffff`)
+  — this crashed the M2b-i compiler itself, with a perfect stack trace
+  pointing at the loop.
+- `failNode` takes a Node, `failTok` a Token — the compiler rejects
+  mixing them; point errors at identifier tokens (not assign nodes)
+  for accurate columns. `HashMapUnmanaged` has `remove`, not
+  `swapRemove`, in 0.16. `break` / `orelse break` work only in loops —
+  restructure switch-case blocks instead.
+- Contextual keywords need a collision survey first: check the exact
+  spelling AND adjacent-token shapes in both repos. Precedents that
+  constrained M2b: `mut` is a real variable name (gringots
+  `frame.zig`), so `lainaa mut x` needs 3-token lookahead; parens must
+  keep meaning calls (`lainaa(x)`); non-ASCII (`siirrä`) does not lex
+  as an identifier at all.
+- Test-column predictions: verify empirically, always. (M2a `:2:22`
+  lesson; M2b predictions held except error sites pointing at `=`
+  instead of the variable — fixed by targeting the identifier token.)
+- Rebuild economics: any `Sema.zig`/`AstGen.zig` edit recompiles the
+  world plus a static-LLVM relink (~15–40 min per cycle). Batch fixes
+  per cycle; use `ast-check`/`build-obj` probes for fast iteration
+  before full builds.
 - `git` on this repo is slow (worktree scan); prefer
   `git --no-optional-locks <cmd> | Select-Object -First N` over pager
   pipes, and `Select-String` over `grep` in PowerShell 5.1.
