@@ -387,6 +387,12 @@ the language memory model instead of running two authorities.
     one script-caused red (shared test-disk state pollution, green on
     fresh disk — not a toolchain regression). Evidence: Zinux
     `docs/PHASE0_EVIDENCE.md` §2026-10-16. M3 cleared to proceed.
+    **M3a DONE 2026-10-16** (consumer `exp/vainolang`): PMM `Frame`
+    ownership prep, 0.16-compatible (no new syntax — stock rejects it at
+    parse, so the toolchain flip stays explicit). Dual-green preserved:
+    stock host 324/324 ×2 + QEMU 4/4, stage3 host 324/324 ×2 + build +
+    smoke. Seams typed for mechanical `luovuta` at the flip. Next:
+    paging/VMM prep, then flip decision (M3b).
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).
