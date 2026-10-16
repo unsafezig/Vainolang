@@ -358,6 +358,14 @@ the language memory model instead of running two authorities.
   **DONE 2026-10-15:** green (Zinux `docs/PHASE0_EVIDENCE.md` §2026-10-15:
   host EXIT 0 ×2, kernel builds + aarch64-verify PASS, QEMU 4/4, strict
   probe exact at `libs/vaino.zig:118,124`). M2b cleared to proceed.
+  **M2b-i DONE 2026-10-16** (`exp/vaara`): lexical borrow checking —
+  `lainaa x` / `lainaa mut x` (contextual, no keyword) lower exactly
+  like `&x`; AstGen enforces exclusivity, no-escape (return/global),
+  no-reassign-while-borrowed, const/nonlocal/comptime guards. 1 positive
+  + 6 negative tests green; vaara tests + full `test-cases` green, no
+  regressions. Notable: `Zir.Inst.Tag` (`enum(u8)`) is FULL — no new
+  ZIR tags possible; borrow/move lower to existing constructs.
+  M2b-ii next: explicit move (`luovuta`) + use-after-move/double-move.
 - **M3 — Kernel migration**, one module at a time, QEMU green at every
   step: PMM → paging/VMM → heap → virtio-blk → snapshot/ELF loader.
   Assembly fallbacks stay (V3 principle).

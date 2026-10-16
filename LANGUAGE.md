@@ -163,7 +163,8 @@ error (M1).
 
 #### Borrowing
 
-A pragmatic subset, with no lifetime inference in v1:
+A pragmatic subset, with no lifetime inference in v1
+(implemented M2b-i, 2026-10-16 — checking is lexical, in AstGen):
 
 - `lainaa` borrows read-only (shareable).
 - `lainaa mut` borrows mutably (exclusive: no other borrow, read or
@@ -175,6 +176,17 @@ A pragmatic subset, with no lifetime inference in v1:
 
 Keywords are Finnish, with no English alias in v1: aliases multiply the
 grammar for no safety gain.
+
+M2b-i enforcement (always on — triggered by the syntax itself, no flag):
+`lainaa x` lowers exactly like `&x` (no new ZIR tag; `Zir.Inst.Tag` is a
+full `enum(u8)`). Checked: mutual exclusion (`mut` vs anything live),
+no escape via `return` or into globals, no reassignment of a borrowed
+owner, `mut`-borrow of `const` rejected, non-local operands rejected,
+`comptime` positions rejected. Deliberate limits: plain-identifier
+operands/uses only (fields, index chains and transitive handle aliases
+are unchecked), block-result and call-result escapes unchecked, generic
+bodies checked once. Move (`luovuta`) and use-after-move follow in
+M2b-ii.
 
 #### Scoped dangerous blocks
 
